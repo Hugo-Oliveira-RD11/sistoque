@@ -1,0 +1,23 @@
+{
+  "$schema": "https://raw.githubusercontent.com/jetify-com/devbox/0.13.6/.schema/devbox.schema.json",
+  "packages": [
+    "dotnet-sdk_9@9.0.203",
+    "dotnet-ef@9.0.3"
+  ],
+  "shell": {
+    "init_hook": [
+      "echo 'devbox is on now'"
+    ],
+    "scripts": {
+      "run": [
+        "dotnet run"
+      ],
+      "build": [
+        "dotnet build"
+      ],
+      "test": [
+        "dotnet test"
+      ]
+    }
+  }
+}
