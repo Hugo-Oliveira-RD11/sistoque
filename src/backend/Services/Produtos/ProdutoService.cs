@@ -1,5 +1,6 @@
 using backend.Models;
 using backend.Repository;
+using backend.Validacao;
 
 namespace backend.Services.Produtos;
 
@@ -20,20 +21,23 @@ public class ProdutoService : IProdutoService
 
     public async Task AdicionarProdutoAsync(Produto produto)
     {
-        if (string.IsNullOrEmpty(produto.Nome))
-            throw new ArgumentException("Nome do produto é obrigatório.");
+        var validador = new ValidarProdutos(); // TODO Fazer a injecao
+        var resultado = await validador.ValidateAsync(produto);
 
-        if(produto.Preco < 0)
-            throw new ArgumentException("nao e permitido criar um produto com valor negativo");
-
-        if(produto.QuantidadeDisponivel < 0) // as vezes o produto e digital ou ta em falta no estoque
-            throw new ArgumentException("nao e permitido criar um produto com quantidade negativo");
+        if(!resultado.IsValid)
+          throw new ArgumentException(resultado.Errors.First().ErrorMessage);
 
         await _produtoRepository.AdicionarAsync(produto);
     }
 
     public async Task AtualizarProdutoAsync(Produto produto)
     {
+      var validador = new ValidarProdutos(); // TODO fazer a injecao
+      var resultado = await validador.ValidateAsync(produto);
+
+      if(!resultado.IsValid)
+        throw new ArgumentException(resultado.Errors.First().ErrorMessage);
+
       Produto? verificaProduto = await ObterPorIdAsync(produto.Id);
       if(ProdutoIgual(produto,verificaProduto))
         throw new ArgumentException("voce nao pode atualizar o produto sem modificacoes");
