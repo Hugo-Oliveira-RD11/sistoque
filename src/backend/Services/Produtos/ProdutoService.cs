@@ -47,7 +47,11 @@ public class ProdutoService : IProdutoService
 
     public async Task RemoverProdutoAsync(Guid id)
     {
-        await _produtoRepository.RemoverAsync(id);
+      Produto? verificaProduto = await ObterPorIdAsync(id);
+      if(verificaProduto is null)
+        throw new ArgumentException("Voce nao pode deletar um produto nao criado");
+
+      await _produtoRepository.RemoverAsync(id);
     }
 
     private bool ProdutoIgual(Produto produto1, Produto produto2)
