@@ -16,13 +16,13 @@ public class ClienteRepository : IClienteRepository
     public async Task<IEnumerable<Cliente>> ObterTodosAsync()
         => await _context.Clientes.ToListAsync();
 
-    public async Task<Cliente?> ObterPorIdAsync(Guid id)
+    public async Task<Cliente?> ObterIdAsync(Guid id)
         => await _context.Clientes.FindAsync(id);
 
-    public async Task<Cliente?> ObterPorEmailAsync(string email)
+    public async Task<Cliente?> ObterEmailAsync(string email)
         => await _context.Clientes.FirstOrDefaultAsync(e => e.Email == email);
 
-    public async Task<Cliente?> ObterPorCpfCnpjAsync(string cpfCnpj)
+    public async Task<Cliente?> ObterCpfCnpjAsync(string cpfCnpj)
         => await _context.Clientes.FirstOrDefaultAsync(e => e.CpfCnpj == cpfCnpj);
 
     public async Task AdicionarAsync(Cliente cliente)
@@ -39,7 +39,7 @@ public class ClienteRepository : IClienteRepository
 
     public async Task RemoverAsync(Guid id)
     {
-        var cliente = await ObterPorIdAsync(id);
+        var cliente = await ObterIdAsync(id);
         _context.Clientes.Remove(cliente!); // nao deve precisar de verificar se o cliente e nulo pois o service vai fazer isso
         await _context.SaveChangesAsync();
     }
