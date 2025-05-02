@@ -362,4 +362,73 @@ public class ClienteServiceTestAdicionar
     mockRepo.Verify(repo => repo.AdicionarAsync(It.IsAny<Cliente>()), Times.Never);
   }
 
+  [Theory]
+  [InlineData("hugo@boss.com")]
+  public async Task AdicionarClienteAsync_DeveLancaExcecao_QuandoEmailJaEsteSidoUsado(string email)
+  {
+    var mockRepo = new Mock<IClienteRepository>();
+    Guid id = Guid.NewGuid();
+    var clienteInserido = new Cliente
+    {
+      Id = id,
+      Nome = "Hugo",
+      CpfCnpj = "12345678912",
+      Telefone = "12345678912",
+      Email = email,
+      SenhaHash = "123456789",
+      Role = "admin"
+    };
+    var novoCliente = new Cliente
+    {
+      Id = id,
+      Nome = "Hugo",
+      CpfCnpj = "12345678913",
+      Telefone = "98765432198",
+      Email = email,
+      SenhaHash = "987654321",
+      Role = "admin"
+    };
+    mockRepo.Setup(repo => repo.ObterEmailAsync(novoCliente.Email)).ReturnsAsync(clienteInserido);
+    var service = new ClienteService(mockRepo.Object);
+
+    var excecao = await Assert.ThrowsAsync<ArgumentException>( () => service.AdicionarAsync(novoCliente));
+
+    mockRepo.Verify(repo => repo.AdicionarAsync(It.IsAny<Cliente>()), Times.Never);
+  }
+
+  [Theory]
+  [InlineData("12345678912")] // testa cpf
+  [InlineData("12345678912345")] // testa cnpj
+  public async Task AdicionarClienteAsync_DeveLancaExcecao_QuandoCpfCnpjJaEsteSidoUsado(string cpfCnpj)
+  {
+    var mockRepo = new Mock<IClienteRepository>();
+    Guid id = Guid.NewGuid();
+    var clienteInserido = new Cliente
+    {
+      Id = id,
+      Nome = "Hugo",
+      CpfCnpj = cpfCnpj,
+      Telefone = "12345678912",
+      Email = "hugo@boss1.com",
+      SenhaHash = "123456789",
+      Role = "admin"
+    };
+    var novoCliente = new Cliente
+    {
+      Id = id,
+      Nome = "Hugo",
+      CpfCnpj = cpfCnpj,
+      Telefone = "98765432198",
+      Email = "hugo@boss.com",
+      SenhaHash = "987654321",
+      Role = "admin"
+    };
+    mockRepo.Setup(repo => repo.ObterEmailAsync(novoCliente.Email)).ReturnsAsync(null as Cliente);
+    mockRepo.Setup(repo => repo.ObterCpfCnpjAsync(clienteInserido.CpfCnpj)).ReturnsAsync(clienteInserido);
+    var service = new ClienteService(mockRepo.Object);
+
+    var excecao = await Assert.ThrowsAsync<ArgumentException>( () => service.AdicionarAsync(novoCliente));
+
+    mockRepo.Verify(repo => repo.AdicionarAsync(It.IsAny<Cliente>()), Times.Never);
+  }
 }
