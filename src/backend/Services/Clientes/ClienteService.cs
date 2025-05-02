@@ -27,6 +27,11 @@ public class ClienteService : IClienteService
 
     public async Task AdicionarAsync(Cliente cliente)
     {
+        var validador = new ValidarCliente(); // TODO fazer a injecao
+        var resultado = await validador.ValidateAsync(cliente);
+        if(!resultado.IsValid)
+          throw new ArgumentException(resultado.Errors.First().ErrorMessage);
+
         await _repository.AdicionarAsync(cliente);
     }
 

@@ -39,7 +39,7 @@ public class ProdutoService : IProdutoService
         throw new ArgumentException(resultado.Errors.First().ErrorMessage);
 
       Produto? verificaProduto = await ObterPorIdAsync(produto.Id);
-      if(ProdutoIgual(produto,verificaProduto))
+      if(ProdutoIgual(produto,verificaProduto)) // regra de negocio especifica
         throw new ArgumentException("voce nao pode atualizar o produto sem modificacoes");
 
       await _produtoRepository.AtualizarAsync(produto);
