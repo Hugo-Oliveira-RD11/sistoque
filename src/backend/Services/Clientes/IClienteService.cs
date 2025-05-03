@@ -10,5 +10,5 @@ public interface IClienteService
     Task<Cliente?> ObterPorCpfCnpjAsync(string cpfCnpj);
     Task AdicionarAsync(Cliente cliente);
     Task AtualizarAsync(Cliente cliente);
-    Task RemoverAsync(Guid id);
+    Task RemoverIdAsync(Guid id);
 }

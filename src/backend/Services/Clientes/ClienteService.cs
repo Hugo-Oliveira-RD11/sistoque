@@ -52,8 +52,17 @@ public class ClienteService : IClienteService
         await _repository.AtualizarAsync(cliente);
     }
 
-    public async Task RemoverAsync(Guid id)
-        => await _repository.RemoverAsync(id);
+    public async Task RemoverIdAsync(Guid id)
+      {
+        var clienteVerifica = await ObterPorIdAsync(id);
+        if(clienteVerifica == null)
+          throw new InvalidOperationException("Nao pode remover um usuario que nao existe");
+
+        if(clienteVerifica.Role != "admin") // regra de negocio especifica
+          throw new InvalidOperationException("usuario sem ser admin nao pode remover usuario");
+
+        await _repository.RemoverAsync(id);
+      }
 
     public async Task<Cliente?> ObterPorEmailAsync(string email)
     {
