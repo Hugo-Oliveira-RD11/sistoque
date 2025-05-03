@@ -1,16 +1,18 @@
 using backend.Models;
 using backend.Repository;
-using backend.Validacao;
+using FluentValidation;
 
 namespace backend.Services.Clientes;
 
 public class ClienteService : IClienteService
 {
     private readonly IClienteRepository _repository;
+    private readonly IValidator<Cliente> _validator;
 
-    public ClienteService(IClienteRepository repository)
+    public ClienteService(IClienteRepository repository, IValidator<Cliente> validator)
     {
         _repository = repository;
+        _validator = validator;
     }
 
     public async Task<IEnumerable<Cliente>?> ObterTodosAsync()
@@ -19,41 +21,46 @@ public class ClienteService : IClienteService
     public async Task<Cliente?> ObterPorIdAsync(Guid id)
     {
         var cliente = await _repository.ObterIdAsync(id);
-        if (cliente is null)
-            return null;
-
         return cliente;
     }
 
     public async Task AdicionarAsync(Cliente cliente)
     {
-        var validador = new ValidarCliente(); // TODO fazer a injecao
-        var resultado = await validador.ValidateAsync(cliente);
+        var resultado = await _validator.ValidateAsync(cliente);
         if (!resultado.IsValid)
             throw new ArgumentException(resultado.Errors.First().ErrorMessage);
 
         Cliente? verificaClienteCpfCnpj = await ObterPorCpfCnpjAsync(cliente.CpfCnpj!);
         if (verificaClienteCpfCnpj != null)
-            throw new ArgumentException("Este cpf/cnpj ja foi cadastrado");
+            throw new ArgumentException("Este cpf/cnpj já foi cadastrado");
 
-        Cliente? verificaClienteEmail = await ObterPorEmailAsync(cliente.Email!); // cirando regras de negocio
+        Cliente? verificaClienteEmail = await ObterPorEmailAsync(cliente.Email!);
         if (verificaClienteEmail != null)
-            throw new ArgumentException("Este email ja foi cadastrado");
-
+            throw new ArgumentException("Este email já foi cadastrado");
 
         await _repository.AdicionarAsync(cliente);
     }
 
     public async Task AtualizarAsync(Cliente cliente)
     {
-        var validador = new ValidarCliente(); // TODO fazer a injecao
-        var resultado = await validador.ValidateAsync(cliente);
+        var resultado = await _validator.ValidateAsync(cliente);
         if (!resultado.IsValid)
             throw new ArgumentException(resultado.Errors.First().ErrorMessage);
 
-        Cliente? clienteVerifica = await ObterPorEmailAsync(cliente.Email);
-        if (ClienteIgual(cliente, clienteVerifica)) // regra de negocio especifica
-            throw new ArgumentException("Nao se pode atualizar sem mudar alguma informacao");
+        Cliente? clienteVerifica = null;
+
+        if (cliente.Id != Guid.Empty)
+            clienteVerifica = await ObterPorIdAsync(cliente.Id);
+        else if (!string.IsNullOrEmpty(cliente.Email))
+            clienteVerifica = await ObterPorEmailAsync(cliente.Email);
+        else if (!string.IsNullOrEmpty(cliente.CpfCnpj))
+            clienteVerifica = await ObterPorCpfCnpjAsync(cliente.CpfCnpj);
+
+        if (clienteVerifica == null)
+            throw new ArgumentException("Usuário não existe/email incorreto");
+
+        if (ClienteIgual(cliente, clienteVerifica))
+            throw new ArgumentException("Não se pode atualizar sem mudar alguma informação");
 
         await _repository.AtualizarAsync(cliente);
     }
@@ -62,37 +69,26 @@ public class ClienteService : IClienteService
     {
         var clienteVerifica = await ObterPorIdAsync(id);
         if (clienteVerifica == null)
-            throw new InvalidOperationException("Nao pode remover um usuario que nao existe");
+            throw new InvalidOperationException("Não pode remover um usuário que não existe");
 
-        if (clienteVerifica.Role != "admin") // regra de negocio especifica
-            throw new InvalidOperationException("usuario sem ser admin nao pode remover usuario");
+        if (clienteVerifica.Role != "admin")
+            throw new InvalidOperationException("Usuário sem ser admin não pode remover usuário");
 
         await _repository.RemoverAsync(id);
     }
 
     public async Task<Cliente?> ObterPorEmailAsync(string email)
-    {
-        var cliente = await _repository.ObterEmailAsync(email);
-        if (cliente is null)
-            return null;
-
-        return cliente;
-    }
+        => await _repository.ObterEmailAsync(email);
 
     public async Task<Cliente?> ObterPorCpfCnpjAsync(string cpfCnpj)
-    {
-        var cliente = await _repository.ObterCpfCnpjAsync(cpfCnpj);
-        if (cliente is null)
-            return null;
+        => await _repository.ObterCpfCnpjAsync(cpfCnpj);
 
-        return cliente;
-    }
     private bool ClienteIgual(Cliente cliente1, Cliente cliente2)
     {
         return string.Equals(cliente1.Nome, cliente2.Nome) &&
-          string.Equals(cliente1.CpfCnpj, cliente2.CpfCnpj) &&
-          string.Equals(cliente1.Telefone, cliente2.Telefone) &&
-          string.Equals(cliente1.Email, cliente2.Email) &&
-          string.Equals(cliente1.Role, cliente2.Role);
+               string.Equals(cliente1.CpfCnpj, cliente2.CpfCnpj) &&
+               string.Equals(cliente1.Telefone, cliente2.Telefone) &&
+               string.Equals(cliente1.Email, cliente2.Email) &&
+               string.Equals(cliente1.Role, cliente2.Role);
     }
 }
