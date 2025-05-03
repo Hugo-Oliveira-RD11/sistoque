@@ -49,6 +49,10 @@ public class ClienteService : IClienteService
         if (string.IsNullOrWhiteSpace(cliente.Nome))
             throw new ArgumentException("Nome é obrigatório.");
 
+        Cliente? clienteVerifica = await ObterPorEmailAsync(cliente.Email);
+        if (ClienteIgual(cliente, clienteVerifica)) // regra de negocio especifica
+            throw new ArgumentException("Nao se pode atualizar sem mudar alguma informacao");
+
         await _repository.AtualizarAsync(cliente);
     }
 
@@ -80,5 +84,12 @@ public class ClienteService : IClienteService
         return null;
 
       return cliente;
+    private bool ClienteIgual(Cliente cliente1, Cliente cliente2)
+    {
+        return string.Equals(cliente1.Nome, cliente2.Nome) &&
+          string.Equals(cliente1.CpfCnpj, cliente2.CpfCnpj) &&
+          string.Equals(cliente1.Telefone, cliente2.Telefone) &&
+          string.Equals(cliente1.Email, cliente2.Email) &&
+          string.Equals(cliente1.Role, cliente2.Role);
     }
 }
