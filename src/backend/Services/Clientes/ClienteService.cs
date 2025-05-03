@@ -46,8 +46,10 @@ public class ClienteService : IClienteService
 
     public async Task AtualizarAsync(Cliente cliente)
     {
-        if (string.IsNullOrWhiteSpace(cliente.Nome))
-            throw new ArgumentException("Nome é obrigatório.");
+        var validador = new ValidarCliente(); // TODO fazer a injecao
+        var resultado = await validador.ValidateAsync(cliente);
+        if (!resultado.IsValid)
+            throw new ArgumentException(resultado.Errors.First().ErrorMessage);
 
         Cliente? clienteVerifica = await ObterPorEmailAsync(cliente.Email);
         if (ClienteIgual(cliente, clienteVerifica)) // regra de negocio especifica
