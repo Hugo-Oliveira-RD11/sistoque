@@ -20,7 +20,7 @@ public class ClienteService : IClienteService
     {
         var cliente = await _repository.ObterIdAsync(id);
         if (cliente is null)
-          return null;
+            return null;
 
         return cliente;
     }
@@ -29,16 +29,16 @@ public class ClienteService : IClienteService
     {
         var validador = new ValidarCliente(); // TODO fazer a injecao
         var resultado = await validador.ValidateAsync(cliente);
-        if(!resultado.IsValid)
-          throw new ArgumentException(resultado.Errors.First().ErrorMessage);
+        if (!resultado.IsValid)
+            throw new ArgumentException(resultado.Errors.First().ErrorMessage);
 
-        Cliente?  verificaClienteCpfCnpj = await  ObterPorCpfCnpjAsync(cliente.CpfCnpj!);
-        if(verificaClienteCpfCnpj != null)
-          throw new ArgumentException("Este cpf/cnpj ja foi cadastrado");
+        Cliente? verificaClienteCpfCnpj = await ObterPorCpfCnpjAsync(cliente.CpfCnpj!);
+        if (verificaClienteCpfCnpj != null)
+            throw new ArgumentException("Este cpf/cnpj ja foi cadastrado");
 
-        Cliente?  verificaClienteEmail = await ObterPorEmailAsync(cliente.Email!); // cirando regras de negocio
-        if(verificaClienteEmail != null)
-          throw new ArgumentException("Este email ja foi cadastrado");
+        Cliente? verificaClienteEmail = await ObterPorEmailAsync(cliente.Email!); // cirando regras de negocio
+        if (verificaClienteEmail != null)
+            throw new ArgumentException("Este email ja foi cadastrado");
 
 
         await _repository.AdicionarAsync(cliente);
@@ -57,33 +57,34 @@ public class ClienteService : IClienteService
     }
 
     public async Task RemoverIdAsync(Guid id)
-      {
+    {
         var clienteVerifica = await ObterPorIdAsync(id);
-        if(clienteVerifica == null)
-          throw new InvalidOperationException("Nao pode remover um usuario que nao existe");
+        if (clienteVerifica == null)
+            throw new InvalidOperationException("Nao pode remover um usuario que nao existe");
 
-        if(clienteVerifica.Role != "admin") // regra de negocio especifica
-          throw new InvalidOperationException("usuario sem ser admin nao pode remover usuario");
+        if (clienteVerifica.Role != "admin") // regra de negocio especifica
+            throw new InvalidOperationException("usuario sem ser admin nao pode remover usuario");
 
         await _repository.RemoverAsync(id);
-      }
+    }
 
     public async Task<Cliente?> ObterPorEmailAsync(string email)
     {
-      var cliente = await _repository.ObterEmailAsync(email);
-      if(cliente is null)
-        return null;
+        var cliente = await _repository.ObterEmailAsync(email);
+        if (cliente is null)
+            return null;
 
-      return cliente;
+        return cliente;
     }
 
     public async Task<Cliente?> ObterPorCpfCnpjAsync(string cpfCnpj)
     {
-      var cliente = await _repository.ObterCpfCnpjAsync(cpfCnpj);
-      if(cliente is null)
-        return null;
+        var cliente = await _repository.ObterCpfCnpjAsync(cpfCnpj);
+        if (cliente is null)
+            return null;
 
-      return cliente;
+        return cliente;
+    }
     private bool ClienteIgual(Cliente cliente1, Cliente cliente2)
     {
         return string.Equals(cliente1.Nome, cliente2.Nome) &&
