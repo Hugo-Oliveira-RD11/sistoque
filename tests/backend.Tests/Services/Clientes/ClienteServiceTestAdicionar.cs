@@ -1,434 +1,282 @@
-
 using backend.Models;
 using backend.Repository;
 using backend.Services.Clientes;
+using FluentValidation;
+using FluentValidation.Results;
 using Moq;
 
 namespace backend.Tests.Services.Clientes;
 
 public class ClienteServiceTestAdicionar
 {
-  [Theory]
-  [InlineData("12345678")]
-  [InlineData("1")]
-  [InlineData("123456789123456")]
-  [InlineData("123.456.789-12")]
-  [InlineData("123.456.789/12")]
-  [InlineData("123456789/12")]
-  public async Task AdicionarClienteAsync_DeveLancaExcecao_QuandoCpfOuCnpjInvalido(string cpfCnpj)
-  {
-    // arrange
-    var mockRepo = new Mock<IClienteRepository>();
-    var service = new ClienteService(mockRepo.Object);
-    var clienteInvalido = new Cliente
+    private readonly Mock<IClienteRepository> _mockRepo;
+    private readonly Mock<IValidator<Cliente>> _mockValidator;
+    private readonly ClienteService _service;
+
+    public ClienteServiceTestAdicionar()
     {
-      Id = Guid.NewGuid(),
-      Nome = "Hugo",
-      CpfCnpj = cpfCnpj,
-      Telefone = "61123456789",
-      Email = "hugo@boss.com",
-      SenhaHash = "12345",
-      Role = "admin"
-    };
+        _mockRepo = new Mock<IClienteRepository>();
+        _mockValidator = new Mock<IValidator<Cliente>>();
+        _service = new ClienteService(_mockRepo.Object, _mockValidator.Object);
+    }
 
-    await Assert.ThrowsAsync<ArgumentException>(() => service.AdicionarAsync(clienteInvalido));
-
-    //assrt
-    mockRepo.Verify(repo => repo.AdicionarAsync(It.IsAny<Cliente>()), Times.Never);
-  }
-
-  [Theory]
-  [InlineData("1* dom pedro")]
-  [InlineData("1 dom pedro")]
-  [InlineData("Dom-pedro")]
-  [InlineData("-Dom pedro")]
-  [InlineData(".-Dom pedro")]
-  [InlineData("Am@nd@")]
-  [InlineData("Dom pedro/1.v")]
-  public async Task AdicionarClienteAsync_DeveLancaExcecao_QuandoNomeTiverCaracteresEspeciaisExcecaoPonto(string nome)
-  {
-    // arrange
-    var mockRepo = new Mock<IClienteRepository>();
-    var service = new ClienteService(mockRepo.Object);
-    var clienteInvalido = new Cliente
+    private void SetupValidatorSuccess()
     {
-      Id = Guid.NewGuid(),
-      Nome = nome,
-      CpfCnpj = "12345678912",
-      Telefone = "61123456789",
-      Email = "hugo@boss.com",
-      SenhaHash = "12345",
-      Role = "admin"
-    };
+        _mockValidator.Setup(v => v.ValidateAsync(It.IsAny<Cliente>(), default))
+            .ReturnsAsync(new ValidationResult());
+    }
 
-    await Assert.ThrowsAsync<ArgumentException>(() => service.AdicionarAsync(clienteInvalido));
-
-    //assrt
-    mockRepo.Verify(repo => repo.AdicionarAsync(It.IsAny<Cliente>()), Times.Never);
-  }
-
-  [Theory]
-  [InlineData("123456789(6")]
-  [InlineData(".1234567891")]
-  [InlineData("@1234567891")]
-  [InlineData("#1234567891")]
-  [InlineData("$1234567891")]
-  [InlineData("%1234567891")]
-  [InlineData("123456789-1")]
-  public async Task AdicionarClienteAsync_DeveLancaExcecao_QuandoTelefoneTiverCaracteresEspeciais(string telefone)
-  {
-    // arrange
-    var mockRepo = new Mock<IClienteRepository>();
-    var service = new ClienteService(mockRepo.Object);
-    var clienteInvalido = new Cliente
+    private void SetupValidatorFailure(string errorMessage)
     {
-      Id = Guid.NewGuid(),
-      Nome = "hugo",
-      CpfCnpj = "12345678912",
-      Telefone = telefone,
-      Email = "hugo@boss.com",
-      SenhaHash = "12345",
-      Role = "admin"
-    };
+        var failures = new List<ValidationFailure>
+        {
+            new ValidationFailure("property", errorMessage)
+        };
+        _mockValidator.Setup(v => v.ValidateAsync(It.IsAny<Cliente>(), default))
+            .ReturnsAsync(new ValidationResult(failures));
+    }
 
-    await Assert.ThrowsAsync<ArgumentException>(() => service.AdicionarAsync(clienteInvalido));
-
-    //assrt
-    mockRepo.Verify(repo => repo.AdicionarAsync(It.IsAny<Cliente>()), Times.Never);
-  }
-
-  [Theory]
-  [InlineData("123456789123")]
-  [InlineData("12345678911")]
-  [InlineData("-1")]
-  public async Task AdicionarClienteAsync_DeveLancaExcecao_QuandoTelefoneTiverMenosOuMaisNumeros(string telefone)
-  {
-    // arrange
-    var mockRepo = new Mock<IClienteRepository>();
-    var service = new ClienteService(mockRepo.Object);
-    var clienteInvalido = new Cliente
+    [Theory]
+    [InlineData("12345678")]
+    [InlineData("1")]
+    [InlineData("123456789123456")]
+    [InlineData("123.456.789-12")]
+    [InlineData("123.456.789/12")]
+    [InlineData("123456789/12")]
+    public async Task AdicionarClienteAsync_DeveLancaExcecao_QuandoCpfOuCnpjInvalido(string cpfCnpj)
     {
-      Id = Guid.NewGuid(),
-      Nome = "hugo",
-      CpfCnpj = "12345678912",
-      Telefone = telefone,
-      Email = "hugo@boss.com",
-      SenhaHash = "12345",
-      Role = "admin"
-    };
+        // arrange
+        SetupValidatorFailure("CPF/CNPJ inválido");
+        var clienteInvalido = new Cliente { CpfCnpj = cpfCnpj };
 
-    await Assert.ThrowsAsync<ArgumentException>(() => service.AdicionarAsync(clienteInvalido));
+        // act & assert
+        await Assert.ThrowsAsync<ArgumentException>(() => _service.AdicionarAsync(clienteInvalido));
+        _mockRepo.Verify(repo => repo.AdicionarAsync(It.IsAny<Cliente>()), Times.Never);
+    }
 
-    //assrt
-    mockRepo.Verify(repo => repo.AdicionarAsync(It.IsAny<Cliente>()), Times.Never);
-  }
-
-  [Theory]
-  [InlineData("a12345678912")]
-  [InlineData("12345678912a")]
-  [InlineData("12345678912A")]
-  [InlineData("123456a78912")]
-  [InlineData("123456A78912")]
-  [InlineData("A12345678912")]
-  public async Task AdicionarClienteAsync_DeveLancaExcecao_QuandoTelefoneTiverLetras(string telefone)
-  {
-    // arrange
-    var mockRepo = new Mock<IClienteRepository>();
-    var service = new ClienteService(mockRepo.Object);
-    var clienteInvalido = new Cliente
+    [Theory]
+    [InlineData("1* dom pedro")]
+    [InlineData("1 dom pedro")]
+    [InlineData("Dom-pedro")]
+    [InlineData("-Dom pedro")]
+    [InlineData(".-Dom pedro")]
+    [InlineData("Am@nd@")]
+    [InlineData("Dom pedro/1.v")]
+    public async Task AdicionarClienteAsync_DeveLancaExcecao_QuandoNomeTiverCaracteresEspeciaisExcecaoPonto(string nome)
     {
-      Id = Guid.NewGuid(),
-      Nome = "hugo",
-      CpfCnpj = "12345678912",
-      Telefone = telefone,
-      Email = "hugo@boss.com",
-      SenhaHash = "12345",
-      Role = "admin"
-    };
+        // arrange
+        SetupValidatorFailure("Nome contém caracteres inválidos");
+        var clienteInvalido = new Cliente { Nome = nome };
 
-    await Assert.ThrowsAsync<ArgumentException>(() => service.AdicionarAsync(clienteInvalido));
+        // act & assert
+        await Assert.ThrowsAsync<ArgumentException>(() => _service.AdicionarAsync(clienteInvalido));
+        _mockRepo.Verify(repo => repo.AdicionarAsync(It.IsAny<Cliente>()), Times.Never);
+    }
 
-    //assrt
-    mockRepo.Verify(repo => repo.AdicionarAsync(It.IsAny<Cliente>()), Times.Never);
-  }
-
-  [Theory]
-  [InlineData(null)]
-  [InlineData("")]
-  public async Task AdicionarClienteAsync_DeveLancaExcecao_QuandoNomeForNuloOuVazio(string? nome)
-  {
-    // arrange
-    var mockRepo = new Mock<IClienteRepository>();
-    var service = new ClienteService(mockRepo.Object);
-    var clienteInvalido = new Cliente
+    [Theory]
+    [InlineData("123456789(6")]
+    [InlineData(".1234567891")]
+    [InlineData("@1234567891")]
+    [InlineData("#1234567891")]
+    [InlineData("$1234567891")]
+    [InlineData("%1234567891")]
+    [InlineData("123456789-1")]
+    public async Task AdicionarClienteAsync_DeveLancaExcecao_QuandoTelefoneTiverCaracteresEspeciais(string telefone)
     {
-      Id = Guid.NewGuid(),
-      Nome = nome,
-      CpfCnpj = "12345678912",
-      Telefone = "12345678912",
-      Email = "hugo@boss.com",
-      SenhaHash = "12345",
-      Role = "admin"
-    };
+        // arrange
+        SetupValidatorFailure("Telefone contém caracteres inválidos");
+        var clienteInvalido = new Cliente { Telefone = telefone };
 
-    await Assert.ThrowsAsync<ArgumentException>(() => service.AdicionarAsync(clienteInvalido));
+        // act & assert
+        await Assert.ThrowsAsync<ArgumentException>(() => _service.AdicionarAsync(clienteInvalido));
+        _mockRepo.Verify(repo => repo.AdicionarAsync(It.IsAny<Cliente>()), Times.Never);
+    }
 
-    //assrt
-    mockRepo.Verify(repo => repo.AdicionarAsync(It.IsAny<Cliente>()), Times.Never);
-  }
-
-  [Theory]
-  [InlineData(null)]
-  [InlineData("")]
-  public async Task AdicionarClienteAsync_DeveLancaExcecao_QuandoEmailForNuloOuVazio(string? email)
-  {
-    // arrange
-    var mockRepo = new Mock<IClienteRepository>();
-    var service = new ClienteService(mockRepo.Object);
-    var clienteInvalido = new Cliente
+    [Theory]
+    [InlineData("123456789123")]
+    [InlineData("12345678911")]
+    [InlineData("-1")]
+    public async Task AdicionarClienteAsync_DeveLancaExcecao_QuandoTelefoneTiverMenosOuMaisNumeros(string telefone)
     {
-      Id = Guid.NewGuid(),
-      Nome = "Hugo",
-      CpfCnpj = "12345678912",
-      Telefone = "12345678912",
-      Email = email,
-      SenhaHash = "12345",
-      Role = "admin"
-    };
+        // arrange
+        SetupValidatorFailure("Telefone deve ter 11 dígitos");
+        var clienteInvalido = new Cliente { Telefone = telefone };
 
-    await Assert.ThrowsAsync<ArgumentException>(() => service.AdicionarAsync(clienteInvalido));
+        // act & assert
+        await Assert.ThrowsAsync<ArgumentException>(() => _service.AdicionarAsync(clienteInvalido));
+        _mockRepo.Verify(repo => repo.AdicionarAsync(It.IsAny<Cliente>()), Times.Never);
+    }
 
-    //assrt
-    mockRepo.Verify(repo => repo.AdicionarAsync(It.IsAny<Cliente>()), Times.Never);
-  }
-
-  [Theory]
-  [InlineData(null)]
-  [InlineData("")]
-  public async Task AdicionarClienteAsync_DeveLancaExcecao_QuandoSenhaForNuloOuVazio(string? senha)
-  {
-    // arrange
-    var mockRepo = new Mock<IClienteRepository>();
-    var service = new ClienteService(mockRepo.Object);
-    var clienteInvalido = new Cliente
+    [Theory]
+    [InlineData("a12345678912")]
+    [InlineData("12345678912a")]
+    [InlineData("12345678912A")]
+    [InlineData("123456a78912")]
+    [InlineData("123456A78912")]
+    [InlineData("A12345678912")]
+    public async Task AdicionarClienteAsync_DeveLancaExcecao_QuandoTelefoneTiverLetras(string telefone)
     {
-      Id = Guid.NewGuid(),
-      Nome = "Hugo",
-      CpfCnpj = "12345678912",
-      Telefone = "12345678912",
-      Email = "hugo@boss.com",
-      SenhaHash = senha,
-      Role = "admin"
-    };
+        // arrange
+        SetupValidatorFailure("Telefone deve conter apenas números");
+        var clienteInvalido = new Cliente { Telefone = telefone };
 
-    await Assert.ThrowsAsync<ArgumentException>(() => service.AdicionarAsync(clienteInvalido));
+        // act & assert
+        await Assert.ThrowsAsync<ArgumentException>(() => _service.AdicionarAsync(clienteInvalido));
+        _mockRepo.Verify(repo => repo.AdicionarAsync(It.IsAny<Cliente>()), Times.Never);
+    }
 
-    //assrt
-    mockRepo.Verify(repo => repo.AdicionarAsync(It.IsAny<Cliente>()), Times.Never);
-  }
-
-  [Theory]
-  [InlineData("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")]
-  [InlineData("1aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")]
-  [InlineData(".aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")]
-  [InlineData("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.")]
-  [InlineData("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa1")]
-  [InlineData("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa ")]
-  public async Task AdicionarClienteAsync_DeveLancaExcecao_QuandoSenhaForMaiorQueSessentaCaracteres(string senha)
-  {
-    // arrange
-    var mockRepo = new Mock<IClienteRepository>();
-    var service = new ClienteService(mockRepo.Object);
-    var clienteInvalido = new Cliente
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    public async Task AdicionarClienteAsync_DeveLancaExcecao_QuandoNomeForNuloOuVazio(string? nome)
     {
-      Id = Guid.NewGuid(),
-      Nome = "Hugo",
-      CpfCnpj = "12345678912",
-      Telefone = "12345678912",
-      Email = "hugo@boss.com",
-      SenhaHash = senha,
-      Role = "admin"
-    };
+        // arrange
+        SetupValidatorFailure("Nome é obrigatório");
+        var clienteInvalido = new Cliente { Nome = nome };
 
-    await Assert.ThrowsAsync<ArgumentException>(() => service.AdicionarAsync(clienteInvalido));
+        // act & assert
+        await Assert.ThrowsAsync<ArgumentException>(() => _service.AdicionarAsync(clienteInvalido));
+        _mockRepo.Verify(repo => repo.AdicionarAsync(It.IsAny<Cliente>()), Times.Never);
+    }
 
-    //assrt
-    mockRepo.Verify(repo => repo.AdicionarAsync(It.IsAny<Cliente>()), Times.Never);
-  }
-
-  [Theory]
-  [InlineData("a2345")]
-  [InlineData(".a345")]
-  [InlineData(". 345")]
-  [InlineData(".@345")]
-  public async Task AdicionarClienteAsync_DeveLancaExcecao_QuandoSenhaForMenorQueSeisCaracteres(string senha)
-  {
-    // arrange
-    var mockRepo = new Mock<IClienteRepository>();
-    var service = new ClienteService(mockRepo.Object);
-    var clienteInvalido = new Cliente
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    public async Task AdicionarClienteAsync_DeveLancaExcecao_QuandoEmailForNuloOuVazio(string? email)
     {
-      Id = Guid.NewGuid(),
-      Nome = "Hugo",
-      CpfCnpj = "12345678912",
-      Telefone = "12345678912",
-      Email = "hugo@boss.com",
-      SenhaHash = senha,
-      Role = "admin"
-    };
+        // arrange
+        SetupValidatorFailure("Email é obrigatório");
+        var clienteInvalido = new Cliente { Email = email };
 
-    await Assert.ThrowsAsync<ArgumentException>(() => service.AdicionarAsync(clienteInvalido));
+        // act & assert
+        await Assert.ThrowsAsync<ArgumentException>(() => _service.AdicionarAsync(clienteInvalido));
+        _mockRepo.Verify(repo => repo.AdicionarAsync(It.IsAny<Cliente>()), Times.Never);
+    }
 
-    //assrt
-    mockRepo.Verify(repo => repo.AdicionarAsync(It.IsAny<Cliente>()), Times.Never);
-  }
-
-  [Theory]
-  [InlineData("")]
-  [InlineData(null)]
-  public async Task AdicionarClienteAsync_DeveLancaExcecao_QuandoRoleForNulaOuVazia(string? role)
-  {
-    // arrange
-    var mockRepo = new Mock<IClienteRepository>();
-    var service = new ClienteService(mockRepo.Object);
-    var clienteInvalido = new Cliente
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    public async Task AdicionarClienteAsync_DeveLancaExcecao_QuandoSenhaForNuloOuVazio(string? senha)
     {
-      Id = Guid.NewGuid(),
-      Nome = "Hugo",
-      CpfCnpj = "12345678912",
-      Telefone = "12345678912",
-      Email = "hugo@boss.com",
-      SenhaHash = "12345678",
-      Role = role
-    };
+        // arrange
+        SetupValidatorFailure("Senha é obrigatória");
+        var clienteInvalido = new Cliente { SenhaHash = senha };
 
-    await Assert.ThrowsAsync<ArgumentException>(() => service.AdicionarAsync(clienteInvalido));
+        // act & assert
+        await Assert.ThrowsAsync<ArgumentException>(() => _service.AdicionarAsync(clienteInvalido));
+        _mockRepo.Verify(repo => repo.AdicionarAsync(It.IsAny<Cliente>()), Times.Never);
+    }
 
-    //assrt
-    mockRepo.Verify(repo => repo.AdicionarAsync(It.IsAny<Cliente>()), Times.Never);
-  }
-
-  [Theory]
-  [InlineData("admin")]
-  [InlineData("user")]
-  public async Task AdicionarClienteAsync_DeveAceitar_QuandoRoleForAdminOuUser(string role)
-  {
-    // arrange
-    var mockRepo = new Mock<IClienteRepository>();
-    var service = new ClienteService(mockRepo.Object);
-    var clienteInvalido = new Cliente
+    [Theory]
+    [InlineData("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")]
+    [InlineData("1aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")]
+    [InlineData(".aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")]
+    [InlineData("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.")]
+    [InlineData("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa1")]
+    [InlineData("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa ")]
+    public async Task AdicionarClienteAsync_DeveLancaExcecao_QuandoSenhaForMaiorQueSessentaCaracteres(string senha)
     {
-      Id = Guid.NewGuid(),
-      Nome = "Hugo",
-      CpfCnpj = "12345678912",
-      Telefone = "12345678912",
-      Email = "hugo@boss.com",
-      SenhaHash = "12345678",
-      Role = role
-    };
+        // arrange
+        SetupValidatorFailure("Senha deve ter no máximo 60 caracteres");
+        var clienteInvalido = new Cliente { SenhaHash = senha };
 
-    await service.AdicionarAsync(clienteInvalido);
+        // act & assert
+        await Assert.ThrowsAsync<ArgumentException>(() => _service.AdicionarAsync(clienteInvalido));
+        _mockRepo.Verify(repo => repo.AdicionarAsync(It.IsAny<Cliente>()), Times.Never);
+    }
 
-    //assrt
-    mockRepo.Verify(repo => repo.AdicionarAsync(It.IsAny<Cliente>()), Times.Once);
-  }
-
-  [Theory]
-  [InlineData(" admin")]
-  [InlineData(" user")]
-  [InlineData("User")]
-  [InlineData("Admin")]
-  [InlineData("User.")]
-  [InlineData("Admin.")]
-  public async Task AdicionarClienteAsync_DeveLancaExcecao_QuandoRoleForDiferenteDeAdminOuUser(string role)
-  {
-    // arrange
-    var mockRepo = new Mock<IClienteRepository>();
-    var service = new ClienteService(mockRepo.Object);
-    var clienteInvalido = new Cliente
+    [Theory]
+    [InlineData("a2345")]
+    [InlineData(".a345")]
+    [InlineData(". 345")]
+    [InlineData(".@345")]
+    public async Task AdicionarClienteAsync_DeveLancaExcecao_QuandoSenhaForMenorQueSeisCaracteres(string senha)
     {
-      Id = Guid.NewGuid(),
-      Nome = "Hugo",
-      CpfCnpj = "12345678912",
-      Telefone = "12345678912",
-      Email = "hugo@boss.com",
-      SenhaHash = "12345678",
-      Role = role
-    };
+        // arrange
+        SetupValidatorFailure("Senha deve ter no mínimo 6 caracteres");
+        var clienteInvalido = new Cliente { SenhaHash = senha };
 
-    await Assert.ThrowsAsync<ArgumentException>(() => service.AdicionarAsync(clienteInvalido));
+        // act & assert
+        await Assert.ThrowsAsync<ArgumentException>(() => _service.AdicionarAsync(clienteInvalido));
+        _mockRepo.Verify(repo => repo.AdicionarAsync(It.IsAny<Cliente>()), Times.Never);
+    }
 
-    //assrt
-    mockRepo.Verify(repo => repo.AdicionarAsync(It.IsAny<Cliente>()), Times.Never);
-  }
-
-  [Theory]
-  [InlineData("hugo@boss.com")]
-  public async Task AdicionarClienteAsync_DeveLancaExcecao_QuandoEmailJaEsteSidoUsado(string email)
-  {
-    var mockRepo = new Mock<IClienteRepository>();
-    Guid id = Guid.NewGuid();
-    var clienteInserido = new Cliente
+    [Theory]
+    [InlineData("")]
+    [InlineData(null)]
+    public async Task AdicionarClienteAsync_DeveLancaExcecao_QuandoRoleForNulaOuVazia(string? role)
     {
-      Id = id,
-      Nome = "Hugo",
-      CpfCnpj = "12345678912",
-      Telefone = "12345678912",
-      Email = email,
-      SenhaHash = "123456789",
-      Role = "admin"
-    };
-    var novoCliente = new Cliente
+        // arrange
+        SetupValidatorFailure("Role é obrigatória");
+        var clienteInvalido = new Cliente { Role = role };
+
+        // act & assert
+        await Assert.ThrowsAsync<ArgumentException>(() => _service.AdicionarAsync(clienteInvalido));
+        _mockRepo.Verify(repo => repo.AdicionarAsync(It.IsAny<Cliente>()), Times.Never);
+    }
+
+    [Theory]
+    [InlineData("admin")]
+    [InlineData("user")]
+    public async Task AdicionarClienteAsync_DeveAceitar_QuandoRoleForAdminOuUser(string role)
     {
-      Id = id,
-      Nome = "Hugo",
-      CpfCnpj = "12345678913",
-      Telefone = "98765432198",
-      Email = email,
-      SenhaHash = "987654321",
-      Role = "admin"
-    };
-    mockRepo.Setup(repo => repo.ObterEmailAsync(novoCliente.Email)).ReturnsAsync(clienteInserido);
-    var service = new ClienteService(mockRepo.Object);
+        // arrange
+        SetupValidatorSuccess();
+        var clienteValido = new Cliente { Role = role };
 
-    var excecao = await Assert.ThrowsAsync<ArgumentException>( () => service.AdicionarAsync(novoCliente));
+        // act
+        await _service.AdicionarAsync(clienteValido);
 
-    mockRepo.Verify(repo => repo.AdicionarAsync(It.IsAny<Cliente>()), Times.Never);
-  }
+        // assert
+        _mockRepo.Verify(repo => repo.AdicionarAsync(It.IsAny<Cliente>()), Times.Once);
+    }
 
-  [Theory]
-  [InlineData("12345678912")] // testa cpf
-  [InlineData("12345678912345")] // testa cnpj
-  public async Task AdicionarClienteAsync_DeveLancaExcecao_QuandoCpfCnpjJaEsteSidoUsado(string cpfCnpj)
-  {
-    var mockRepo = new Mock<IClienteRepository>();
-    Guid id = Guid.NewGuid();
-    var clienteInserido = new Cliente
+    [Theory]
+    [InlineData(" admin")]
+    [InlineData(" user")]
+    [InlineData("User")]
+    [InlineData("Admin")]
+    [InlineData("User.")]
+    [InlineData("Admin.")]
+    public async Task AdicionarClienteAsync_DeveLancaExcecao_QuandoRoleForDiferenteDeAdminOuUser(string role)
     {
-      Id = id,
-      Nome = "Hugo",
-      CpfCnpj = cpfCnpj,
-      Telefone = "12345678912",
-      Email = "hugo@boss1.com",
-      SenhaHash = "123456789",
-      Role = "admin"
-    };
-    var novoCliente = new Cliente
+        // arrange
+        SetupValidatorFailure("Role deve ser 'admin' ou 'user'");
+        var clienteInvalido = new Cliente { Role = role };
+
+        // act & assert
+        await Assert.ThrowsAsync<ArgumentException>(() => _service.AdicionarAsync(clienteInvalido));
+        _mockRepo.Verify(repo => repo.AdicionarAsync(It.IsAny<Cliente>()), Times.Never);
+    }
+
+    [Theory]
+    [InlineData("hugo@boss.com")]
+    public async Task AdicionarClienteAsync_DeveLancaExcecao_QuandoEmailJaEsteSidoUsado(string email)
     {
-      Id = id,
-      Nome = "Hugo",
-      CpfCnpj = cpfCnpj,
-      Telefone = "98765432198",
-      Email = "hugo@boss.com",
-      SenhaHash = "987654321",
-      Role = "admin"
-    };
-    mockRepo.Setup(repo => repo.ObterEmailAsync(novoCliente.Email)).ReturnsAsync(null as Cliente);
-    mockRepo.Setup(repo => repo.ObterCpfCnpjAsync(clienteInserido.CpfCnpj)).ReturnsAsync(clienteInserido);
-    var service = new ClienteService(mockRepo.Object);
+        // arrange
+        SetupValidatorSuccess();
+        var clienteExistente = new Cliente { Email = email };
+        _mockRepo.Setup(repo => repo.ObterEmailAsync(email))
+            .ReturnsAsync(clienteExistente);
 
-    var excecao = await Assert.ThrowsAsync<ArgumentException>( () => service.AdicionarAsync(novoCliente));
+        // act & assert
+        await Assert.ThrowsAsync<ArgumentException>(() => _service.AdicionarAsync(clienteExistente));
+        _mockRepo.Verify(repo => repo.AdicionarAsync(It.IsAny<Cliente>()), Times.Never);
+    }
 
-    mockRepo.Verify(repo => repo.AdicionarAsync(It.IsAny<Cliente>()), Times.Never);
-  }
+    [Theory]
+    [InlineData("12345678912")] // testa cpf
+    [InlineData("12345678912345")] // testa cnpj
+    public async Task AdicionarClienteAsync_DeveLancaExcecao_QuandoCpfCnpjJaEsteSidoUsado(string cpfCnpj)
+    {
+        // arrange
+        SetupValidatorSuccess();
+        var clienteExistente = new Cliente { CpfCnpj = cpfCnpj };
+        _mockRepo.Setup(repo => repo.ObterCpfCnpjAsync(cpfCnpj))
+            .ReturnsAsync(clienteExistente);
+
+        // act & assert
+        await Assert.ThrowsAsync<ArgumentException>(() => _service.AdicionarAsync(clienteExistente));
+        _mockRepo.Verify(repo => repo.AdicionarAsync(It.IsAny<Cliente>()), Times.Never);
+    }
 }

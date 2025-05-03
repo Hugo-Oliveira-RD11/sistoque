@@ -7,7 +7,33 @@ namespace backend.Tests.Services.Produtos;
 
 public class ProdutoServiceTestAtualizar
 {
+private Cliente CriarClientePadrao(Guid? id = null)
+{
+    return new Cliente
+    {
+        Id = id ?? Guid.Empty,
+        Nome = "Cliente Teste",
+        Email = "teste@teste.com",
+        CpfCnpj = "12345678901",
+        Telefone = "11999999999",
+        SenhaHash = "123456",
+        Role = "user"
+    };
+}
 
+private Cliente CriarClienteComDiferencas(Cliente original)
+{
+    return new Cliente
+    {
+        Id = original.Id,
+        Nome = original.Nome + " Modificado",
+        Email = original.Email,
+        CpfCnpj = original.CpfCnpj,
+        Telefone = original.Telefone,
+        SenhaHash = original.SenhaHash,
+        Role = original.Role
+    };
+}
   [Theory]
   [InlineData("Produto diferente teste")]
   [InlineData("Produto 1.diferente teste")]
