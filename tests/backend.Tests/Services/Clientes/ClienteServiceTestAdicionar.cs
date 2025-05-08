@@ -1,6 +1,7 @@
 using backend.Models;
 using backend.Repository;
 using backend.Services.Clientes;
+using backend.Services.Clientes.Auth;
 using FluentValidation;
 using FluentValidation.Results;
 using Moq;
@@ -10,6 +11,8 @@ namespace backend.Tests.Services.Clientes;
 public class ClienteServiceTestAdicionar
 {
     private readonly Mock<IClienteRepository> _mockRepo;
+    private readonly Mock<ITokenService> _mockToken;
+    private readonly Mock<IHashServices> _mockHash;
     private readonly Mock<IValidator<Cliente>> _mockValidator;
     private readonly ClienteService _service;
 
@@ -17,7 +20,9 @@ public class ClienteServiceTestAdicionar
     {
         _mockRepo = new Mock<IClienteRepository>();
         _mockValidator = new Mock<IValidator<Cliente>>();
-        _service = new ClienteService(_mockRepo.Object, _mockValidator.Object);
+        _mockToken = new Mock<ITokenService>();
+        _mockHash = new Mock<IHashServices>();
+        _service = new ClienteService(_mockRepo.Object, _mockValidator.Object, _mockToken.Object, _mockHash.Object);
     }
 
     private void SetupValidatorSuccess()
