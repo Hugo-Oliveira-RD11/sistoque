@@ -1,5 +1,6 @@
 using backend.Models;
 using backend.Repository;
+using backend.Services.Clientes.Auth;
 using FluentValidation;
 
 namespace backend.Services.Clientes;
@@ -8,11 +9,15 @@ public class ClienteService : IClienteService
 {
     private readonly IClienteRepository _repository;
     private readonly IValidator<Cliente> _validator;
+    private readonly ITokenService _tokenService;
+    private readonly IHashServices _hashService;
 
-    public ClienteService(IClienteRepository repository, IValidator<Cliente> validator)
+    public ClienteService(IClienteRepository repository, IValidator<Cliente> validator, ITokenService tokenService, IHashServices hashService)
     {
         _repository = repository;
         _validator = validator;
+        _tokenService = tokenService;
+        _hashService = hashService;
     }
 
     public async Task<IEnumerable<Cliente>?> ObterTodosAsync()
@@ -37,6 +42,8 @@ public class ClienteService : IClienteService
         Cliente? verificaClienteEmail = await ObterPorEmailAsync(cliente.Email!);
         if (verificaClienteEmail != null)
             throw new ArgumentException("Este email já foi cadastrado");
+
+
 
         await _repository.AdicionarAsync(cliente);
     }
@@ -77,11 +84,30 @@ public class ClienteService : IClienteService
         await _repository.RemoverAsync(id);
     }
 
+    public async Task<string> LoginAsync(string email, string senha)
+    {
+      var cliente = await ObterPorEmailAsync(email);
+      if (cliente == null || !_hashService.VerificarSenha(senha, cliente.SenhaHash))
+        throw new ArgumentException("Email ou senha inválidos");
+
+      var token = _tokenService.GerarToken(cliente);
+      _tokenService.SalvarToken(token);
+      return token;
+    }
+
     public async Task<Cliente?> ObterPorEmailAsync(string email)
         => await _repository.ObterEmailAsync(email);
 
     public async Task<Cliente?> ObterPorCpfCnpjAsync(string cpfCnpj)
         => await _repository.ObterCpfCnpjAsync(cpfCnpj);
+    public Task LogoutAsync(string token)
+    {
+      if (!_tokenService.TokenValido(token))
+        throw new ArgumentException("Token inválido ou já expirado");
+
+      _tokenService.RemoverToken(token);
+      return Task.CompletedTask;
+    }
 
     private bool ClienteIgual(Cliente cliente1, Cliente cliente2)
     {

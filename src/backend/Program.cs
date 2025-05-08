@@ -14,7 +14,8 @@ builder.Services.AddOpenApi();
 
 var app = builder.Build();
 
-builder.Services.AddScoped<IValidator<Cliente>,ValidarCliente>();
+builder.Services.AddSingleton<IHashServices, HashService>();
+builder.Services.AddScoped<IValidator<Cliente>, ValidarCliente>();
 builder.Services.AddScoped<IClienteService, ClienteService>();
 builder.Services.AddScoped<IProdutoService, ProdutoService>();
 

@@ -11,4 +11,7 @@ public interface IClienteService
     Task AdicionarAsync(Cliente cliente);
     Task AtualizarAsync(Cliente cliente);
     Task RemoverIdAsync(Guid id);
+    Task<string> LoginAsync(string email, string senha);
+    Task LogoutAsync(string token);
+
 }

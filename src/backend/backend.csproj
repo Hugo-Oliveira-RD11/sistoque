@@ -7,9 +7,27 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="BCrypt.Net-Next" Version="4.0.3" />
     <PackageReference Include="FluentValidation" Version="11.11.0" />
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="9.0.4" />
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="9.0.4" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.InMemory" Version="9.0.4" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Remove="Repository\Cliente\ITokenRepository\**" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Remove="Repository\Cliente\ITokenRepository\**" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Remove="Repository\Cliente\ITokenRepository\**" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Remove="Repository\Cliente\ITokenRepository\**" />
   </ItemGroup>
 
 </Project>
