@@ -102,7 +102,8 @@ public class ClienteService : IClienteService
         => await _repository.ObterCpfCnpjAsync(cpfCnpj);
     public Task LogoutAsync(string token)
     {
-      if (!_tokenService.TokenValido(token))
+      var valido = _tokenService.TokenValido(token);
+      if (valido.Result)
         throw new ArgumentException("Token inválido ou já expirado");
 
       _tokenService.RemoverToken(token);

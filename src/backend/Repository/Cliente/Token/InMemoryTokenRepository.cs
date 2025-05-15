@@ -20,6 +20,24 @@ public class InMemoryTokenRepository : ITokenRepository
   {
     return _tokens.ContainsKey(token);
   }
+
+  public Task SalvarAsync(string token)
+  {
+    Salvar(token);
+    return Task.CompletedTask;
+  }
+
+  public Task RemoverAsync(string token)
+  {
+    Remover(token);
+    return Task.CompletedTask;
+  }
+
+  public Task<bool> ExisteAsync(string token)
+  {
+    var existe = Existe(token);
+    return Task.FromResult(existe);
+  }
 }
 
 

@@ -1,154 +1,160 @@
 using backend.Models;
-using backend.Repository;
+using backend.Repository.Produtos;
 using backend.Services.Produtos;
+using FluentValidation;
+using FluentValidation.Results;
+using Microsoft.AspNetCore.Http;
 using Moq;
 
 namespace backend.Tests.Services.Produtos;
 
 public class ProdutoServiceTestAdicionar
 {
+    private readonly Mock<IProdutoRepository> _mockRepo;
+    private readonly Mock<IValidator<Produto>> _mockValidator;
+    private readonly Mock<IHttpContextAccessor> _mockContextAccessor;
+    private readonly ProdutoService _service;
 
-  [Fact]
-  public async Task AdicionarProdutoAsync_DeveAdicionarProduto_QuandoForValido()
-  {
-    // Arrange
-    var mockRepo = new Mock<IProdutoRepository>();
-    var service = new ProdutoService(mockRepo.Object);
-
-    var produtoValido = new Produto
+    public ProdutoServiceTestAdicionar()
     {
-      Id = Guid.NewGuid(),
-      Nome = "Produto Teste",
-      Preco = 10.0M,
-      QuantidadeDisponivel = 5,
-    };
+        _mockRepo = new Mock<IProdutoRepository>();
+        _mockValidator = new Mock<IValidator<Produto>>();
+        _mockContextAccessor = new Mock<IHttpContextAccessor>();
+        _service = new ProdutoService(_mockRepo.Object, _mockValidator.Object,_mockContextAccessor.Object);
+    }
 
-    // Act
-    await service.AdicionarProdutoAsync(produtoValido);
-
-    // assert
-    mockRepo.Verify(repo => repo.AdicionarAsync(It.IsAny<Produto>()), Times.Once);
-  }
-
-  [Theory]
-  [InlineData(0,10)]
-  [InlineData(0,10.99)]
-  [InlineData(10,0.0)]
-  [InlineData(0,0.0)]
-  public async Task AdicionarProdutoAsync_DeveAdicionarProduto_QuandoPrecoOuQuantidadeForZero(int quantidade, decimal preco)
-  {
-    // Arrange
-    var mockRepo = new Mock<IProdutoRepository>();
-    var service = new ProdutoService(mockRepo.Object);
-
-    var produtoValido = new Produto
+    private void SetupValidatorSuccess()
     {
-      Id = Guid.NewGuid(),
-      Nome = "Produto Teste",
-      Preco = preco,
-      QuantidadeDisponivel = quantidade,
-    };
+        _mockValidator.Setup(v => v.ValidateAsync(It.IsAny<Produto>(), default))
+            .ReturnsAsync(new ValidationResult());
+    }
 
-    // Act
-    await service.AdicionarProdutoAsync(produtoValido);
-
-    // assert
-    mockRepo.Verify(repo => repo.AdicionarAsync(It.IsAny<Produto>()), Times.Once);
-  }
-
-  [Theory]
-  [InlineData(-1)]
-  [InlineData(-10000)]
-  public async Task AdicionarProdutoAsync_DeveLancaExcecao_QuandoQuantidadeMenorQueZero(int quantidade)
-  {
-    // Arrange
-    var mockRepo = new Mock<IProdutoRepository>();
-    var service = new ProdutoService(mockRepo.Object);
-
-    var produtoInvalido = new Produto
+    private void SetupValidatorFailure(string errorMessage)
     {
-      Id = Guid.NewGuid(),
-      Nome = "Produto Teste",
-      Preco = 10,
-      QuantidadeDisponivel = quantidade
-    };
+        var failures = new List<ValidationFailure>
+        {
+            new ValidationFailure("Property", errorMessage)
+        };
+        _mockValidator.Setup(v => v.ValidateAsync(It.IsAny<Produto>(), default))
+            .ReturnsAsync(new ValidationResult(failures));
+    }
 
-    // Act
-    var act = async () => await service.AdicionarProdutoAsync(produtoInvalido);
-
-    // assert
-    var execao = await Assert.ThrowsAsync<ArgumentException>(act);
-    mockRepo.Verify(repo => repo.AdicionarAsync(It.IsAny<Produto>()), Times.Never);
-  }
-
-  [Theory]
-  [InlineData(-1)]
-  [InlineData(-10000.0)]
-  [InlineData(-0.1)]
-  public async Task AdicionarProdutoAsync_DeveLancaExcecao_QuandoPrecoMenorQueZero(decimal preco)
-  {
-    // Arrange
-    var mockRepo = new Mock<IProdutoRepository>();
-    var service = new ProdutoService(mockRepo.Object);
-
-    var produtoInvalido = new Produto
+    private Produto CriarProdutoPadrao(
+        Guid? id = null,
+        string nome = "Produto Teste",
+        decimal preco = 10.0M,
+        int quantidade = 5)
     {
-      Id = Guid.NewGuid(),
-      Nome = "Produto Teste",
-      Preco = preco,
-      QuantidadeDisponivel = 5,
-    };
+        return new Produto
+        {
+            Id = id ?? Guid.NewGuid(),
+            Nome = nome,
+            Preco = preco,
+            QuantidadeDisponivel = quantidade
+        };
+    }
 
-    // Act
-    var act = async () => await service.AdicionarProdutoAsync(produtoInvalido);
-
-    // assert
-    var execao = await Assert.ThrowsAsync<ArgumentException>(act);
-    mockRepo.Verify(repo => repo.AdicionarAsync(It.IsAny<Produto>()), Times.Never);
-  }
-
-  [Theory]
-  [InlineData("")]
-  [InlineData(null)]
-  public async Task AdicionarprodutoAsync_DeveLancaExcecao_QuandoNomeForNuloOuVazio(string nome)
-  {
-    var mockRepo = new Mock<IProdutoRepository>();
-    var service = new ProdutoService(mockRepo.Object);
-    var produtoInvalido = new Produto
+    [Fact]
+    public async Task AdicionarProdutoAsync_DeveAdicionarProduto_QuandoForValido()
     {
-      Id = Guid.NewGuid(),
-      Nome = nome,
-      Preco = 10,
-      QuantidadeDisponivel = 5,
-    };
+        // Arrange
+        SetupValidatorSuccess();
+        var produtoValido = CriarProdutoPadrao();
 
-    var act = async () => await service.AdicionarProdutoAsync(produtoInvalido);
+        // Act
+        await _service.AdicionarProdutoAsync(produtoValido);
 
-    var execao = await Assert.ThrowsAsync<ArgumentException>(act);
-    mockRepo.Verify(repo => repo.AdicionarAsync(It.IsAny<Produto>()), Times.Never);
-  }
+        // Assert
+        _mockRepo.Verify(repo => repo.AdicionarAsync(It.IsAny<Produto>()), Times.Once);
+        _mockValidator.Verify(v => v.ValidateAsync(It.IsAny<Produto>(), default), Times.Once);
+    }
 
-  [Theory]
-  [InlineData("1.Ola")]
-  [InlineData("1Ola")]
-  [InlineData(".1Ola")]
-  [InlineData(".Ola1")]
-  public async Task AdicionarprodutoAsync_DeveLancaExcecao_QuandoNomeComecarDiferenteDeLetras(string nome)
-  {
-    var mockRepo = new Mock<IProdutoRepository>();
-    var service = new ProdutoService(mockRepo.Object);
-    var produtoInvalido = new Produto
+    [Theory]
+    [InlineData(0, 10)]
+    [InlineData(0, 10.99)]
+    [InlineData(10, 0.0)]
+    [InlineData(0, 0.0)]
+    public async Task AdicionarProdutoAsync_DeveAdicionarProduto_QuandoPrecoOuQuantidadeForZero(int quantidade, decimal preco)
     {
-      Id = Guid.NewGuid(),
-      Nome = nome,
-      Preco = 10,
-      QuantidadeDisponivel = 5,
-    };
+        // Arrange
+        SetupValidatorSuccess();
+        var produtoValido = CriarProdutoPadrao(preco: preco, quantidade: quantidade);
 
-    var act = async () => await service.AdicionarProdutoAsync(produtoInvalido);
+        // Act
+        await _service.AdicionarProdutoAsync(produtoValido);
 
-    var execao = await Assert.ThrowsAsync<ArgumentException>(act);
-    mockRepo.Verify(repo => repo.AdicionarAsync(It.IsAny<Produto>()), Times.Never);
-  }
+        // Assert
+        _mockRepo.Verify(repo => repo.AdicionarAsync(It.IsAny<Produto>()), Times.Once);
+    }
 
+    [Theory]
+    [InlineData(-1)]
+    [InlineData(-10000)]
+    public async Task AdicionarProdutoAsync_DeveLancarExcecao_QuandoQuantidadeMenorQueZero(int quantidade)
+    {
+        // Arrange
+        SetupValidatorFailure("Quantidade não pode ser negativa");
+        var produtoInvalido = CriarProdutoPadrao(quantidade: quantidade);
+
+        // Act
+        var act = async () => await _service.AdicionarProdutoAsync(produtoInvalido);
+
+        // Assert
+        await Assert.ThrowsAsync<ValidationException>(act);
+        _mockRepo.Verify(repo => repo.AdicionarAsync(It.IsAny<Produto>()), Times.Never);
+    }
+
+    [Theory]
+    [InlineData(-1)]
+    [InlineData(-10000.0)]
+    [InlineData(-0.1)]
+    public async Task AdicionarProdutoAsync_DeveLancarExcecao_QuandoPrecoMenorQueZero(decimal preco)
+    {
+        // Arrange
+        SetupValidatorFailure("Preço não pode ser negativo");
+        var produtoInvalido = CriarProdutoPadrao(preco: preco);
+
+        // Act
+        var act = async () => await _service.AdicionarProdutoAsync(produtoInvalido);
+
+        // Assert
+        await Assert.ThrowsAsync<ValidationException>(act);
+        _mockRepo.Verify(repo => repo.AdicionarAsync(It.IsAny<Produto>()), Times.Never);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData(null)]
+    public async Task AdicionarProdutoAsync_DeveLancarExcecao_QuandoNomeForNuloOuVazio(string nome)
+    {
+        // Arrange
+        SetupValidatorFailure("Nome é obrigatório");
+        var produtoInvalido = CriarProdutoPadrao(nome: nome);
+
+        // Act
+        var act = async () => await _service.AdicionarProdutoAsync(produtoInvalido);
+
+        // Assert
+        await Assert.ThrowsAsync<ValidationException>(act);
+        _mockRepo.Verify(repo => repo.AdicionarAsync(It.IsAny<Produto>()), Times.Never);
+    }
+
+    [Theory]
+    [InlineData("1.Ola")]
+    [InlineData("1Ola")]
+    [InlineData(".1Ola")]
+    [InlineData(".Ola1")]
+    public async Task AdicionarProdutoAsync_DeveLancarExcecao_QuandoNomeComecarDiferenteDeLetras(string nome)
+    {
+        // Arrange
+        SetupValidatorFailure("Nome deve começar com letras");
+        var produtoInvalido = CriarProdutoPadrao(nome: nome);
+
+        // Act
+        var act = async () => await _service.AdicionarProdutoAsync(produtoInvalido);
+
+        // Assert
+        await Assert.ThrowsAsync<ValidationException>(act);
+        _mockRepo.Verify(repo => repo.AdicionarAsync(It.IsAny<Produto>()), Times.Never);
+    }
 }

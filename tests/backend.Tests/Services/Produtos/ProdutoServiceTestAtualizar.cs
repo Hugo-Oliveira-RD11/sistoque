@@ -1,287 +1,330 @@
 using backend.Models;
-using backend.Repository;
+using backend.Repository.Produtos;
 using backend.Services.Produtos;
+using FluentValidation;
+using FluentValidation.Results;
+using Microsoft.AspNetCore.Http;
 using Moq;
+using System.Security.Claims;
 
 namespace backend.Tests.Services.Produtos;
 
 public class ProdutoServiceTestAtualizar
 {
-private Cliente CriarClientePadrao(Guid? id = null)
-{
-    return new Cliente
+    private readonly Mock<IProdutoRepository> _mockRepo;
+    private readonly Mock<IValidator<Produto>> _mockValidator;
+    private readonly Mock<IHttpContextAccessor> _mockContextAccessor;
+    private readonly ProdutoService _service;
+    private readonly Guid _usuarioId = Guid.NewGuid();
+    private readonly Guid _outroUsuarioId = Guid.NewGuid();
+
+    public ProdutoServiceTestAtualizar()
     {
-        Id = id ?? Guid.Empty,
-        Nome = "Cliente Teste",
-        Email = "teste@teste.com",
-        CpfCnpj = "12345678901",
-        Telefone = "11999999999",
-        SenhaHash = "123456",
-        Role = "user"
-    };
-}
+        _mockRepo = new Mock<IProdutoRepository>();
+        _mockValidator = new Mock<IValidator<Produto>>();
+        _mockContextAccessor = new Mock<IHttpContextAccessor>();
 
-private Cliente CriarClienteComDiferencas(Cliente original)
-{
-    return new Cliente
+        // Configuração padrão do contexto HTTP com usuário autenticado
+        var user = new ClaimsPrincipal(new ClaimsIdentity(new Claim[]
+        {
+            new Claim(ClaimTypes.NameIdentifier, _usuarioId.ToString())
+        }));
+
+        _mockContextAccessor.Setup(x => x.HttpContext).Returns(new DefaultHttpContext()
+        {
+            User = user
+        });
+
+        _service = new ProdutoService(_mockRepo.Object, _mockValidator.Object, _mockContextAccessor.Object);
+    }
+
+    private void SetupValidatorSuccess()
     {
-        Id = original.Id,
-        Nome = original.Nome + " Modificado",
-        Email = original.Email,
-        CpfCnpj = original.CpfCnpj,
-        Telefone = original.Telefone,
-        SenhaHash = original.SenhaHash,
-        Role = original.Role
-    };
-}
-  [Theory]
-  [InlineData("Produto diferente teste")]
-  [InlineData("Produto 1.diferente teste")]
-  [InlineData("Produto 1-diferente teste")]
-  [InlineData("Produto 1.-diferente teste")]
-  [InlineData("Produto 1-.diferente teste")]
-  [InlineData("produto 1.diferente teste")]
-  [InlineData("produto 1-diferente teste")]
-  [InlineData("produto 1.-diferente teste")]
-  [InlineData("produto 1-.diferente teste")]
-  public async Task AtualizaProdutoAsync_DeveAtualizar_QuandoProdutoNomeForValidoEDiferente(string nome)
-  {
-    var mockRepo = new Mock<IProdutoRepository>();
-    var service = new ProdutoService(mockRepo.Object);
-    var produtoInserido = new Produto
+        _mockValidator.Setup(v => v.ValidateAsync(It.IsAny<Produto>(), default))
+            .ReturnsAsync(new ValidationResult());
+    }
+
+    private void SetupValidatorFailure(string errorMessage)
     {
-      Id = Guid.NewGuid(),
-      Nome = "Produto Igual Teste",
-      Preco = 10,
-      QuantidadeDisponivel = 5,
-    };
-    mockRepo.Setup(repo => repo.ObterPorIdAsync(produtoInserido.Id)).ReturnsAsync(produtoInserido);
-    var produtoAtualizarValido = new Produto
+        var failures = new List<ValidationFailure>
+        {
+            new ValidationFailure("Property", errorMessage)
+        };
+        _mockValidator.Setup(v => v.ValidateAsync(It.IsAny<Produto>(), default))
+            .ReturnsAsync(new ValidationResult(failures));
+    }
+
+    private Produto CriarProdutoPadrao(
+        Guid? id = null,
+        Guid? usuarioId = null,
+        string nome = "Produto Teste",
+        decimal preco = 10.0M,
+        int quantidade = 5,
+        string descricao = null,
+        DateTime? dataValidade = null)
     {
-        Id = produtoInserido.Id,
-        Nome = nome,
-        Preco = 10,
-        QuantidadeDisponivel = 5,
-    };
+        return new Produto
+        {
+            Id = id ?? Guid.NewGuid(),
+            usuarioId = usuarioId ?? _usuarioId,
+            Nome = nome,
+            Preco = preco,
+            QuantidadeDisponivel = quantidade,
+            Descricao = descricao,
+            DataValidade = dataValidade
+        };
+    }
 
-
-    await service.AtualizarProdutoAsync(produtoAtualizarValido);
-
-    mockRepo.Verify(repo => repo.AtualizarAsync(produtoAtualizarValido), Times.Once);
-  }
-
-  [Theory]
-  [InlineData(0)]
-  [InlineData(9.00)]
-  [InlineData(999999.00)]
-  [InlineData(999999.999)]
-  [InlineData(10.99)]
-  public async Task AtualizaProdutoAsync_DeveAtualizar_QuandoProdutoPrecoForValidoEDiferente(decimal preco)
-  {
-    var mockRepo = new Mock<IProdutoRepository>();
-    var service = new ProdutoService(mockRepo.Object);
-    var produtoInserido = new Produto
+    private void SetupProdutoExistente(Produto produto)
     {
-      Id = Guid.NewGuid(),
-      Nome = "Produto Igual Teste",
-      Preco = 10,
-      QuantidadeDisponivel = 5,
-    };
-    mockRepo.Setup(repo => repo.ObterPorIdAsync(produtoInserido.Id)).ReturnsAsync(produtoInserido);
-    var produtoAtualizarValido = new Produto
+        _mockRepo.Setup(repo => repo.ObterPorIdAsync(produto.Id))
+                .ReturnsAsync(produto);
+    }
+
+
+    [Fact]
+    public async Task AtualizarProdutoAsync_DeveLancarExcecao_QuandoProdutoForIgual()
     {
-        Id = produtoInserido.Id,
-        Nome = produtoInserido.Nome,
-        Preco = preco,
-        QuantidadeDisponivel = 5,
-    };
+        // Arrange
+        SetupValidatorSuccess();
+        var produtoExistente = CriarProdutoPadrao();
+        SetupProdutoExistente(produtoExistente);
+
+        var produtoAtualizado = CriarProdutoPadrao(
+            id: produtoExistente.Id,
+            nome: produtoExistente.Nome,
+            preco: produtoExistente.Preco,
+            quantidade: produtoExistente.QuantidadeDisponivel);
+
+        // Act
+        var act = async () => await _service.AtualizarProdutoAsync(produtoAtualizado);
+
+        // Assert
+        await Assert.ThrowsAsync<ArgumentException>(act);
+        _mockRepo.Verify(repo => repo.AtualizarAsync(It.IsAny<Produto>()), Times.Never);
+    }
 
 
-    await service.AtualizarProdutoAsync(produtoAtualizarValido);
-
-    mockRepo.Verify(repo => repo.AtualizarAsync(produtoAtualizarValido), Times.Once);
-  }
-
-  [Theory]
-  [InlineData(0)]
-  [InlineData(9.00)]
-  [InlineData(999999.00)]
-  [InlineData(999999.999)]
-  [InlineData(10.99)]
-  public async Task AtualizaProdutoAsync_DeveAtualizar_QuandoProdutoQuantidadeForValidoEDiferente(int quantidade)
-  {
-    var mockRepo = new Mock<IProdutoRepository>();
-    var service = new ProdutoService(mockRepo.Object);
-    var produtoInserido = new Produto
+    [Theory]
+    [InlineData("Produto diferente teste")]
+    [InlineData("Produto 1.diferente teste")]
+    [InlineData("Produto 1-diferente teste")]
+    [InlineData("Produto 1.-diferente teste")]
+    [InlineData("Produto 1-.diferente teste")]
+    [InlineData("produto 1.diferente teste")]
+    [InlineData("produto 1-diferente teste")]
+    [InlineData("produto 1.-diferente teste")]
+    [InlineData("produto 1-.diferente teste")]
+    public async Task AtualizarProdutoAsync_DeveAtualizar_QuandoNomeForValidoEDiferente(string nome)
     {
-      Id = Guid.NewGuid(),
-      Nome = "Produto Igual Teste",
-      Preco = 10,
-      QuantidadeDisponivel = 5,
-    };
-    mockRepo.Setup(repo => repo.ObterPorIdAsync(produtoInserido.Id)).ReturnsAsync(produtoInserido);
-    var produtoAtualizarValido = new Produto
+        // Arrange
+        SetupValidatorSuccess();
+        var produtoExistente = CriarProdutoPadrao();
+        SetupProdutoExistente(produtoExistente);
+
+        var produtoAtualizado = CriarProdutoPadrao(
+            id: produtoExistente.Id,
+            nome: nome,
+            preco: produtoExistente.Preco,
+            quantidade: produtoExistente.QuantidadeDisponivel);
+
+        // Act
+        await _service.AtualizarProdutoAsync(produtoAtualizado);
+
+        // Assert
+        _mockRepo.Verify(repo => repo.AtualizarAsync(produtoAtualizado), Times.Once);
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(9.00)]
+    [InlineData(999999.00)]
+    [InlineData(999999.999)]
+    [InlineData(10.99)]
+    public async Task AtualizarProdutoAsync_DeveAtualizar_QuandoPrecoForValidoEDiferente(decimal preco)
     {
-        Id = produtoInserido.Id,
-        Nome = produtoInserido.Nome,
-        Preco = produtoInserido.Preco,
-        QuantidadeDisponivel = quantidade,
-    };
+        // Arrange
+        SetupValidatorSuccess();
+        var produtoExistente = CriarProdutoPadrao();
+        SetupProdutoExistente(produtoExistente);
 
+        var produtoAtualizado = CriarProdutoPadrao(
+            id: produtoExistente.Id,
+            nome: produtoExistente.Nome,
+            preco: preco,
+            quantidade: produtoExistente.QuantidadeDisponivel);
 
-    await service.AtualizarProdutoAsync(produtoAtualizarValido);
+        // Act
+        await _service.AtualizarProdutoAsync(produtoAtualizado);
 
-    mockRepo.Verify(repo => repo.AtualizarAsync(produtoAtualizarValido), Times.Once);
-  }
+        // Assert
+        _mockRepo.Verify(repo => repo.AtualizarAsync(produtoAtualizado), Times.Once);
+    }
 
-  [Fact]
-  public async Task AtualizaProdutoAsync_DeveLancaExcecao_QuandoProdutoTentarAtualizarForIgualJaInserido()
-  {
-    var mockRepo = new Mock<IProdutoRepository>();
-    var service = new ProdutoService(mockRepo.Object);
-    var produtoInserido = new Produto
+    [Theory]
+    [InlineData(0)]
+    [InlineData(9)]
+    [InlineData(999999)]
+    [InlineData(10)]
+    public async Task AtualizarProdutoAsync_DeveAtualizar_QuandoQuantidadeForValidoEDiferente(int quantidade)
     {
-      Id = Guid.NewGuid(),
-      Nome = "Produto Igual Teste",
-      Preco = 10,
-      QuantidadeDisponivel = 5,
-    };
-    mockRepo.Setup(repo => repo.ObterPorIdAsync(produtoInserido.Id)).ReturnsAsync(produtoInserido);
-    var produtoAtualizaRepetido = new Produto
+        // Arrange
+        SetupValidatorSuccess();
+        var produtoExistente = CriarProdutoPadrao();
+        SetupProdutoExistente(produtoExistente);
+
+        var produtoAtualizado = CriarProdutoPadrao(
+            id: produtoExistente.Id,
+            nome: produtoExistente.Nome,
+            preco: produtoExistente.Preco,
+            quantidade: quantidade);
+
+        // Act
+        await _service.AtualizarProdutoAsync(produtoAtualizado);
+
+        // Assert
+        _mockRepo.Verify(repo => repo.AtualizarAsync(produtoAtualizado), Times.Once);
+    }
+
+
+    [Fact]
+    public async Task AtualizarProdutoAsync_DeveLancarExcecao_QuandoUsuarioNaoForDono()
     {
-        Id = produtoInserido.Id,
-        Nome = produtoInserido.Nome,
-        Preco = 10,
-        QuantidadeDisponivel = 5,
-    };
+        // Arrange
+        SetupValidatorSuccess();
+        var produtoExistente = CriarProdutoPadrao(usuarioId: _outroUsuarioId);
+        SetupProdutoExistente(produtoExistente);
 
+        var produtoAtualizado = CriarProdutoPadrao(
+            id: produtoExistente.Id,
+            nome: "Novo nome",
+            preco: produtoExistente.Preco,
+            quantidade: produtoExistente.QuantidadeDisponivel);
 
-    var act = async () => await service.AtualizarProdutoAsync(produtoAtualizaRepetido);
+        // Act
+        var act = async () => await _service.AtualizarProdutoAsync(produtoAtualizado);
 
-    var excecao = await Assert.ThrowsAsync<ArgumentException>(act);
-    mockRepo.Verify(repo => repo.AtualizarAsync(produtoAtualizaRepetido), Times.Never);
-  }
+        // Assert
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(act);
+        _mockRepo.Verify(repo => repo.AtualizarAsync(It.IsAny<Produto>()), Times.Never);
+    }
 
-  [Theory]
-  [InlineData("")]
-  [InlineData(null)]
-  public async Task AtualizaProdutoAsync_DeveLancaExcecao_QuandoProdutoTentarAtualizarTerNomeNuloOuVazio(string nome)
-  {
-    var mockRepo = new Mock<IProdutoRepository>();
-    var service = new ProdutoService(mockRepo.Object);
-    var produtoInserido = new Produto
+    [Fact]
+    public async Task AtualizarProdutoAsync_DeveLancarExcecao_QuandoProdutoNaoExistir()
     {
-      Id = Guid.NewGuid(),
-      Nome = "Produto Igual Teste",
-      Preco = 10,
-      QuantidadeDisponivel = 5,
-    };
-    mockRepo.Setup(repo => repo.ObterPorIdAsync(produtoInserido.Id)).ReturnsAsync(produtoInserido);
-    var produtoInvalido = new Produto
+        // Arrange
+        SetupValidatorSuccess();
+        var id = Guid.NewGuid();
+        _mockRepo.Setup(repo => repo.ObterPorIdAsync(id))
+                .ReturnsAsync((Produto?)null);
+
+        var produtoAtualizado = CriarProdutoPadrao(id: id);
+
+        // Act
+        var act = async () => await _service.AtualizarProdutoAsync(produtoAtualizado);
+
+        // Assert
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(act);
+        _mockRepo.Verify(repo => repo.AtualizarAsync(It.IsAny<Produto>()), Times.Never);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData(null)]
+    public async Task AtualizarProdutoAsync_DeveLancarExcecao_QuandoNomeForNuloOuVazio(string nome)
     {
-        Id = produtoInserido.Id,
-        Nome = nome,
-        Preco = 10,
-        QuantidadeDisponivel = 5,
-    };
+        // Arrange
+        SetupValidatorFailure("Nome é obrigatório");
+        var produtoExistente = CriarProdutoPadrao();
+        SetupProdutoExistente(produtoExistente);
 
+        var produtoAtualizado = CriarProdutoPadrao(
+            id: produtoExistente.Id,
+            nome: nome,
+            preco: produtoExistente.Preco,
+            quantidade: produtoExistente.QuantidadeDisponivel);
 
-    var act = async () => await service.AtualizarProdutoAsync(produtoInvalido);
+        // Act
+        var act = async () => await _service.AtualizarProdutoAsync(produtoAtualizado);
 
-    var excecao = await Assert.ThrowsAsync<ArgumentException>(act);
-    mockRepo.Verify(repo => repo.AtualizarAsync(produtoInvalido), Times.Never);
-  }
+        // Assert
+        await Assert.ThrowsAsync<ValidationException>(act);
+        _mockRepo.Verify(repo => repo.AtualizarAsync(It.IsAny<Produto>()), Times.Never);
+    }
 
-  [Theory]
-  [InlineData("1.Ola")]
-  [InlineData("1Ola")]
-  [InlineData(".1Ola")]
-  [InlineData(".Ola1")]
-  public async Task AtualizaProdutoAsync_DeveLancaExcecao_QuandoProdutoTentarAtualizarTerNomeSemComecaPorLetras(string nome)
-  {
-    var mockRepo = new Mock<IProdutoRepository>();
-    var service = new ProdutoService(mockRepo.Object);
-    var produtoInserido = new Produto
+    [Theory]
+    [InlineData("1.Ola")]
+    [InlineData("1Ola")]
+    [InlineData(".1Ola")]
+    [InlineData(".Ola1")]
+    public async Task AtualizarProdutoAsync_DeveLancarExcecao_QuandoNomeComecarDiferenteDeLetras(string nome)
     {
-      Id = Guid.NewGuid(),
-      Nome = "Produto Igual Teste",
-      Preco = 10,
-      QuantidadeDisponivel = 5,
-    };
-    mockRepo.Setup(repo => repo.ObterPorIdAsync(produtoInserido.Id)).ReturnsAsync(produtoInserido);
-    var produtoInvalido = new Produto
+        // Arrange
+        SetupValidatorFailure("Nome deve começar com letras");
+        var produtoExistente = CriarProdutoPadrao();
+        SetupProdutoExistente(produtoExistente);
+
+        var produtoAtualizado = CriarProdutoPadrao(
+            id: produtoExistente.Id,
+            nome: nome,
+            preco: produtoExistente.Preco,
+            quantidade: produtoExistente.QuantidadeDisponivel);
+
+        // Act
+        var act = async () => await _service.AtualizarProdutoAsync(produtoAtualizado);
+
+        // Assert
+        await Assert.ThrowsAsync<ValidationException>(act);
+        _mockRepo.Verify(repo => repo.AtualizarAsync(It.IsAny<Produto>()), Times.Never);
+    }
+
+    [Theory]
+    [InlineData(1000001.00)]
+    [InlineData(1000000.01)]
+    [InlineData(-0.01)]
+    public async Task AtualizarProdutoAsync_DeveLancarExcecao_QuandoPrecoForaDosLimites(decimal preco)
     {
-        Id = produtoInserido.Id,
-        Nome = nome,
-        Preco = 10,
-        QuantidadeDisponivel = 5,
-    };
+        // Arrange
+        SetupValidatorFailure("Preço fora dos limites permitidos");
+        var produtoExistente = CriarProdutoPadrao();
+        SetupProdutoExistente(produtoExistente);
 
+        var produtoAtualizado = CriarProdutoPadrao(
+            id: produtoExistente.Id,
+            nome: produtoExistente.Nome,
+            preco: preco,
+            quantidade: produtoExistente.QuantidadeDisponivel);
 
-    var act = async () => await service.AtualizarProdutoAsync(produtoInvalido);
+        // Act
+        var act = async () => await _service.AtualizarProdutoAsync(produtoAtualizado);
 
-    var excecao = await Assert.ThrowsAsync<ArgumentException>(act);
-    mockRepo.Verify(repo => repo.AtualizarAsync(produtoInvalido), Times.Never);
-  }
+        // Assert
+        await Assert.ThrowsAsync<ValidationException>(act);
+        _mockRepo.Verify(repo => repo.AtualizarAsync(It.IsAny<Produto>()), Times.Never);
+    }
 
-  [Theory]
-  [InlineData(1000001.00)]
-  [InlineData(1000000.01)]
-  [InlineData(-0.01)]
-  public async Task AtualizaProdutoAsync_DeveLancaExcecao_QuandoProdutoTentarAtualizarPrecoForaDosLimites(decimal preco)
-  {
-    var mockRepo = new Mock<IProdutoRepository>();
-    var service = new ProdutoService(mockRepo.Object);
-    var produtoInserido = new Produto
+    [Theory]
+    [InlineData(1000001)]
+    [InlineData(-1)]
+    public async Task AtualizarProdutoAsync_DeveLancarExcecao_QuandoQuantidadeForaDosLimites(int quantidade)
     {
-      Id = Guid.NewGuid(),
-      Nome = "Produto Igual Teste",
-      Preco = 10,
-      QuantidadeDisponivel = 5,
-    };
-    mockRepo.Setup(repo => repo.ObterPorIdAsync(produtoInserido.Id)).ReturnsAsync(produtoInserido);
-    var produtoInvalido = new Produto
-    {
-        Id = produtoInserido.Id,
-        Nome = produtoInserido.Nome,
-        Preco = preco,
-        QuantidadeDisponivel = 5,
-    };
+        // Arrange
+        SetupValidatorFailure("Quantidade fora dos limites permitidos");
+        var produtoExistente = CriarProdutoPadrao();
+        SetupProdutoExistente(produtoExistente);
 
+        var produtoAtualizado = CriarProdutoPadrao(
+            id: produtoExistente.Id,
+            nome: produtoExistente.Nome,
+            preco: produtoExistente.Preco,
+            quantidade: quantidade);
 
-    var act = async () => await service.AtualizarProdutoAsync(produtoInvalido);
+        // Act
+        var act = async () => await _service.AtualizarProdutoAsync(produtoAtualizado);
 
-    var excecao = await Assert.ThrowsAsync<ArgumentException>(act);
-    mockRepo.Verify(repo => repo.AtualizarAsync(produtoInvalido), Times.Never);
-  }
+        // Assert
+        await Assert.ThrowsAsync<ValidationException>(act);
+        _mockRepo.Verify(repo => repo.AtualizarAsync(It.IsAny<Produto>()), Times.Never);
+    }
 
-  [Theory]
-  [InlineData(1000001)]
-  [InlineData(-1)]
-  public async Task AtualizaProdutoAsync_DeveLancaExcecao_QuandoProdutoTentarAtualizarQuantidadeForaDosLimites(int quantidade)
-  {
-    var mockRepo = new Mock<IProdutoRepository>();
-    var service = new ProdutoService(mockRepo.Object);
-    var produtoInserido = new Produto
-    {
-      Id = Guid.NewGuid(),
-      Nome = "Produto Igual Teste",
-      Preco = 10,
-      QuantidadeDisponivel = 5,
-    };
-    mockRepo.Setup(repo => repo.ObterPorIdAsync(produtoInserido.Id)).ReturnsAsync(produtoInserido);
-    var produtoInvalido = new Produto
-    {
-        Id = produtoInserido.Id,
-        Nome = produtoInserido.Nome,
-        Preco = produtoInserido.Preco,
-        QuantidadeDisponivel = quantidade,
-    };
-
-
-    var act = async () => await service.AtualizarProdutoAsync(produtoInvalido);
-
-    var excecao = await Assert.ThrowsAsync<ArgumentException>(act);
-    mockRepo.Verify(repo => repo.AtualizarAsync(produtoInvalido), Times.Never);
-  }
-}
+    }
