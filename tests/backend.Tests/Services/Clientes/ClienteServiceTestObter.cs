@@ -1,136 +1,159 @@
 using backend.Models;
 using backend.Repository;
 using backend.Services.Clientes;
+using backend.Services.Clientes.Auth;
 using FluentValidation;
+using FluentValidation.Results;
 using Moq;
 
 namespace backend.Tests.Services.Clientes;
 
 public class ClienteServiceTestObter
 {
-    private ClienteService CriarServiceComMocks(
-        Mock<IClienteRepository> mockRepo,
-        Mock<IValidator<Cliente>>? mockValidator = null)
-    {
-        mockValidator ??= new Mock<IValidator<Cliente>>();
-        mockValidator.Setup(v => v.ValidateAsync(It.IsAny<Cliente>(), default))
-                     .ReturnsAsync(new FluentValidation.Results.ValidationResult());
+    private readonly Mock<IClienteRepository> _mockRepo;
+    private readonly Mock<ITokenService> _mockToken;
+    private readonly Mock<IHashServices> _mockHash;
+    private readonly Mock<IValidator<Cliente>> _mockValidator;
+    private readonly ClienteService _service;
 
-        return new ClienteService(mockRepo.Object, mockValidator.Object);
+    public ClienteServiceTestObter()
+    {
+        _mockRepo = new Mock<IClienteRepository>();
+        _mockValidator = new Mock<IValidator<Cliente>>();
+        _mockToken = new Mock<ITokenService>();
+        _mockHash = new Mock<IHashServices>();
+        _service = new ClienteService(_mockRepo.Object, _mockValidator.Object, _mockToken.Object, _mockHash.Object);
+    }
+
+    private void SetupValidatorSuccess()
+    {
+        _mockValidator.Setup(v => v.ValidateAsync(It.IsAny<Cliente>(), default))
+            .ReturnsAsync(new ValidationResult());
+    }
+
+    private Cliente CriarClientePadrao(Guid? id = null)
+    {
+        return new Cliente
+        {
+            Id = id ?? Guid.NewGuid(),
+            Nome = "Cliente Teste",
+            Email = "teste@teste.com",
+            CpfCnpj = "12345678901",
+            Telefone = "11999999999",
+            SenhaHash = "123456",
+            Role = "user"
+        };
     }
 
     [Fact]
     public async Task ObterPorIdAsync_DeveRetornarCliente_QuandoIdForValido()
     {
-        var mockRepo = new Mock<IClienteRepository>();
-        var id = Guid.NewGuid();
-        var clienteEsperado = new Cliente
-        {
-            Id = id,
-            Nome = "Hugo",
-            CpfCnpj = "12345678912",
-            Telefone = "98765432198",
-            Email = "hugo@boss.com",
-            SenhaHash = "987654321",
-            Role = "admin"
-        };
+        // Arrange
+        SetupValidatorSuccess();
+        var clienteEsperado = CriarClientePadrao();
 
-        mockRepo.Setup(repo => repo.ObterIdAsync(id)).ReturnsAsync(clienteEsperado);
-        var service = CriarServiceComMocks(mockRepo);
+        _mockRepo.Setup(repo => repo.ObterIdAsync(clienteEsperado.Id))
+               .ReturnsAsync(clienteEsperado);
 
-        var resultado = await service.ObterPorIdAsync(clienteEsperado.Id);
+        // Act
+        var resultado = await _service.ObterPorIdAsync(clienteEsperado.Id);
 
+        // Assert
         Assert.Equivalent(clienteEsperado, resultado);
+        _mockRepo.Verify(repo => repo.ObterIdAsync(clienteEsperado.Id), Times.Once);
     }
 
     [Fact]
     public async Task ObterPorEmailAsync_DeveRetornarCliente_QuandoEmailForValido()
     {
-        var mockRepo = new Mock<IClienteRepository>();
-        var clienteEsperado = new Cliente
-        {
-            Id = Guid.NewGuid(),
-            Nome = "Hugo",
-            CpfCnpj = "12345678912",
-            Telefone = "98765432198",
-            Email = "hugo@boss.com",
-            SenhaHash = "987654321",
-            Role = "admin"
-        };
+        // Arrange
+        SetupValidatorSuccess();
+        var clienteEsperado = CriarClientePadrao();
 
-        mockRepo.Setup(repo => repo.ObterEmailAsync(clienteEsperado.Email)).ReturnsAsync(clienteEsperado);
-        var service = CriarServiceComMocks(mockRepo);
+        _mockRepo.Setup(repo => repo.ObterEmailAsync(clienteEsperado.Email))
+               .ReturnsAsync(clienteEsperado);
 
-        var resultado = await service.ObterPorEmailAsync(clienteEsperado.Email);
+        // Act
+        var resultado = await _service.ObterPorEmailAsync(clienteEsperado.Email);
 
+        // Assert
         Assert.Equivalent(clienteEsperado, resultado);
+        _mockRepo.Verify(repo => repo.ObterEmailAsync(clienteEsperado.Email), Times.Once);
     }
 
     [Theory]
-    [InlineData("12345678912")]
-    [InlineData("12345678912345")]
+    [InlineData("12345678912")] // CPF
+    [InlineData("12345678912345")] // CNPJ
     public async Task ObterPorCpfCnpjAsync_DeveRetornarCliente_QuandoCpfOuCnpjForValido(string cpfCnpj)
     {
-        var mockRepo = new Mock<IClienteRepository>();
-        var clienteEsperado = new Cliente
-        {
-            Id = Guid.NewGuid(),
-            Nome = "Hugo",
-            CpfCnpj = cpfCnpj,
-            Telefone = "98765432198",
-            Email = "hugo@boss.com",
-            SenhaHash = "987654321",
-            Role = "admin"
-        };
+        // Arrange
+        SetupValidatorSuccess();
+        var clienteEsperado = CriarClientePadrao();
+        clienteEsperado.CpfCnpj = cpfCnpj;
 
-        mockRepo.Setup(repo => repo.ObterCpfCnpjAsync(clienteEsperado.CpfCnpj)).ReturnsAsync(clienteEsperado);
-        var service = CriarServiceComMocks(mockRepo);
+        _mockRepo.Setup(repo => repo.ObterCpfCnpjAsync(cpfCnpj))
+               .ReturnsAsync(clienteEsperado);
 
-        var resultado = await service.ObterPorCpfCnpjAsync(clienteEsperado.CpfCnpj);
+        // Act
+        var resultado = await _service.ObterPorCpfCnpjAsync(cpfCnpj);
 
+        // Assert
         Assert.Equivalent(clienteEsperado, resultado);
+        _mockRepo.Verify(repo => repo.ObterCpfCnpjAsync(cpfCnpj), Times.Once);
     }
 
     [Fact]
     public async Task ObterPorIdAsync_DeveRetornarNull_QuandoIdForInvalido()
     {
-        var mockRepo = new Mock<IClienteRepository>();
-        var id = Guid.NewGuid();
+        // Arrange
+        SetupValidatorSuccess();
+        var idInvalido = Guid.NewGuid();
 
-        mockRepo.Setup(repo => repo.ObterIdAsync(id)).ReturnsAsync((Cliente?)null);
-        var service = CriarServiceComMocks(mockRepo);
+        _mockRepo.Setup(repo => repo.ObterIdAsync(idInvalido))
+               .ReturnsAsync((Cliente?)null);
 
-        var resultado = await service.ObterPorIdAsync(id);
+        // Act
+        var resultado = await _service.ObterPorIdAsync(idInvalido);
 
+        // Assert
         Assert.Null(resultado);
+        _mockRepo.Verify(repo => repo.ObterIdAsync(idInvalido), Times.Once);
     }
 
-    [Theory]
-    [InlineData("hugo@boss.com")]
-    public async Task ObterPorEmailAsync_DeveRetornarNull_QuandoEmailForInvalido(string emailInvalido)
+    [Fact]
+    public async Task ObterPorEmailAsync_DeveRetornarNull_QuandoEmailForInvalido()
     {
-        var mockRepo = new Mock<IClienteRepository>();
+        // Arrange
+        SetupValidatorSuccess();
+        var emailInvalido = "email@invalido.com";
 
-        mockRepo.Setup(repo => repo.ObterEmailAsync(emailInvalido)).ReturnsAsync((Cliente?)null);
-        var service = CriarServiceComMocks(mockRepo);
+        _mockRepo.Setup(repo => repo.ObterEmailAsync(emailInvalido))
+               .ReturnsAsync((Cliente?)null);
 
-        var resultado = await service.ObterPorEmailAsync(emailInvalido);
+        // Act
+        var resultado = await _service.ObterPorEmailAsync(emailInvalido);
 
+        // Assert
         Assert.Null(resultado);
+        _mockRepo.Verify(repo => repo.ObterEmailAsync(emailInvalido), Times.Once);
     }
 
     [Theory]
-    [InlineData("12345678912")]
-    [InlineData("12345678912345")]
+    [InlineData("12345678912")] // CPF inválido
+    [InlineData("12345678912345")] // CNPJ inválido
     public async Task ObterPorCpfCnpjAsync_DeveRetornarNull_QuandoCpfOuCnpjForInvalido(string cpfCnpjInvalido)
     {
-        var mockRepo = new Mock<IClienteRepository>();
+        // Arrange
+        SetupValidatorSuccess();
 
-        mockRepo.Setup(repo => repo.ObterCpfCnpjAsync(cpfCnpjInvalido)).ReturnsAsync((Cliente?)null);
-        var service = CriarServiceComMocks(mockRepo);
+        _mockRepo.Setup(repo => repo.ObterCpfCnpjAsync(cpfCnpjInvalido))
+               .ReturnsAsync((Cliente?)null);
 
-        var resultado = await service.ObterPorCpfCnpjAsync(cpfCnpjInvalido);
+        // Act
+        var resultado = await _service.ObterPorCpfCnpjAsync(cpfCnpjInvalido);
 
+        // Assert
         Assert.Null(resultado);
+        _mockRepo.Verify(repo => repo.ObterCpfCnpjAsync(cpfCnpjInvalido), Times.Once);
     }
 }
