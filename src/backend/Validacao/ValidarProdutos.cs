@@ -13,7 +13,7 @@ public class ValidarProdutos : AbstractValidator<Produto>
       .NotNull().WithMessage("Nome do produto nao pode ser vazio")
       .MinimumLength(2).WithMessage("Produto deve ter pelo menos 2 caracteres")
       .MaximumLength(255).WithMessage("Produto nao pode ser maior que 255 caracteres")
-      .Matches("^[A-Za-z][A-Za-z0-9 .-]*$")
+      .Matches(@"^[A-Za-z][A-Za-z0-9 .-]*$")
         .WithMessage("o nome so pode comecar com letra, pode ter infen e ponto");
 
 

@@ -1,51 +1,130 @@
 using backend.Models;
-using backend.Repository;
 using backend.Services.Produtos;
+using FluentValidation;
+using FluentValidation.Results;
+using Microsoft.AspNetCore.Http;
 using Moq;
+using System.Security.Claims;
+using backend.Repository.Produtos;
 
 namespace backend.Tests.Services.Produtos;
 
 public class ProdutoServiceTestRemover
 {
-  [Fact]
-  public async Task RemoverProdutoAsync_DeveRemover_QuandoExistirUm()
-  {
-    var mockRepo = new Mock<IProdutoRepository>();
-    var id = Guid.NewGuid();
-    var produtoRemover = new Produto
+    private readonly Mock<IProdutoRepository> _mockRepo;
+    private readonly Mock<IValidator<Produto>> _mockValidator;
+    private readonly Mock<IHttpContextAccessor> _mockContextAccessor;
+    private readonly ProdutoService _service;
+    private readonly Guid _usuarioId = Guid.NewGuid();
+    private readonly Guid _outroUsuarioId = Guid.NewGuid();
+
+    public ProdutoServiceTestRemover()
     {
-        Id = id,
-        Nome = "Produto para deletar",
-        Preco = 10,
-        QuantidadeDisponivel = 5,
-    };
+        _mockRepo = new Mock<IProdutoRepository>();
+        _mockValidator = new Mock<IValidator<Produto>>();
+        _mockContextAccessor = new Mock<IHttpContextAccessor>();
 
-    mockRepo.Setup(repo => repo.ObterPorIdAsync(id)).ReturnsAsync(produtoRemover);
+        // Configuração padrão do contexto HTTP com usuário autenticado
+        var user = new ClaimsPrincipal(new ClaimsIdentity(new Claim[]
+        {
+            new Claim(ClaimTypes.NameIdentifier, _usuarioId.ToString())
+        }));
 
-    var service = new ProdutoService(mockRepo.Object);
+        _mockContextAccessor.Setup(x => x.HttpContext).Returns(new DefaultHttpContext()
+        {
+            User = user
+        });
 
-    await service.RemoverProdutoAsync(id);
+        _service = new ProdutoService(_mockRepo.Object, _mockValidator.Object, _mockContextAccessor.Object);
+    }
 
-    mockRepo.Verify(repo => repo.ObterPorIdAsync(id), Times.Once);
-    mockRepo.Verify(repo => repo.RemoverAsync(id), Times.Once);
-  }
+    private Produto CriarProdutoPadrao(
+        Guid? id = null,
+        Guid? usuarioId = null,
+        string nome = "Produto Teste",
+        decimal preco = 10.0M,
+        int quantidade = 5)
+    {
+        return new Produto
+        {
+            Id = id ?? Guid.NewGuid(),
+            usuarioId = usuarioId ?? _usuarioId,
+            Nome = nome,
+            Preco = preco,
+            QuantidadeDisponivel = quantidade
+        };
+    }
 
-  [Theory]
-  [InlineData("08bb54f0-2a6d-4a88-ba16-1c0bc9fb5766")] // id inexistente
-  [InlineData("1a9f04a8-2d1a-485a-b2fd-3fec29aafbff")]
-  public async Task RemoverProdutoAsync_DeveLancaExcecao_QuandoNaoExistirOuIdErrado(string stringId)
-  {
-    var mockRepo = new Mock<IProdutoRepository>();
-    var Id = Guid.Parse(stringId);
-    mockRepo.Setup(repo => repo.ObterPorIdAsync(Id)).ReturnsAsync((Produto?)null);
+    [Fact]
+    public async Task RemoverProdutoAsync_DeveRemover_QuandoExistirEUsuarioForDono()
+    {
+        // Arrange
+        var id = Guid.NewGuid();
+        var produtoRemover = CriarProdutoPadrao(id);
 
-    var service = new ProdutoService(mockRepo.Object);
+        _mockRepo.Setup(repo => repo.ObterPorIdAsync(id))
+            .ReturnsAsync(produtoRemover);
 
-    var act = async () => await service.RemoverProdutoAsync(Id);
+        // Act
+        await _service.RemoverProdutoAsync(id);
 
-    var excecao = await Assert.ThrowsAsync<ArgumentException>(act);
-    mockRepo.Verify(repo => repo.ObterPorIdAsync(Id), Times.Once);
-    mockRepo.Verify(repo => repo.RemoverAsync(Id), Times.Never);
-  }
+        // Assert
+        _mockRepo.Verify(repo => repo.ObterPorIdAsync(id), Times.Once);
+        _mockRepo.Verify(repo => repo.RemoverAsync(id), Times.Once);
+    }
 
+    [Theory]
+    [InlineData("08bb54f0-2a6d-4a88-ba16-1c0bc9fb5766")] // id inexistente
+    [InlineData("1a9f04a8-2d1a-485a-b2fd-3fec29aafbff")]
+    public async Task RemoverProdutoAsync_DeveLancarExcecao_QuandoNaoExistir(string stringId)
+    {
+        // Arrange
+        var id = Guid.Parse(stringId);
+        _mockRepo.Setup(repo => repo.ObterPorIdAsync(id))
+            .ReturnsAsync((Produto?)null);
+
+        // Act & Assert
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(
+            () => _service.RemoverProdutoAsync(id));
+
+        _mockRepo.Verify(repo => repo.ObterPorIdAsync(id), Times.Once);
+        _mockRepo.Verify(repo => repo.RemoverAsync(id), Times.Never);
+    }
+
+    [Fact]
+    public async Task RemoverProdutoAsync_DeveLancarExcecao_QuandoUsuarioNaoForDono()
+    {
+        // Arrange
+        var id = Guid.NewGuid();
+        var produtoDeOutroUsuario = CriarProdutoPadrao(id, _outroUsuarioId);
+
+        _mockRepo.Setup(repo => repo.ObterPorIdAsync(id))
+            .ReturnsAsync(produtoDeOutroUsuario);
+
+        // Act & Assert
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(
+            () => _service.RemoverProdutoAsync(id));
+
+        _mockRepo.Verify(repo => repo.ObterPorIdAsync(id), Times.Once);
+        _mockRepo.Verify(repo => repo.RemoverAsync(id), Times.Never);
+    }
+
+    [Fact]
+    public async Task RemoverProdutoAsync_DeveLancarExcecao_QuandoUsuarioNaoAutenticado()
+    {
+        // Arrange
+        var serviceSemUsuario = new ProdutoService(
+            _mockRepo.Object,
+            _mockValidator.Object,
+            new Mock<IHttpContextAccessor>().Object); // Contexto sem usuário
+
+        var id = Guid.NewGuid();
+
+        // Act & Assert
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(
+            () => serviceSemUsuario.RemoverProdutoAsync(id));
+
+        _mockRepo.Verify(repo => repo.ObterPorIdAsync(It.IsAny<Guid>()), Times.Never);
+        _mockRepo.Verify(repo => repo.RemoverAsync(It.IsAny<Guid>()), Times.Never);
+    }
 }
