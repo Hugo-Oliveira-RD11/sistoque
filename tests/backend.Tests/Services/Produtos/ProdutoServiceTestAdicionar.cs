@@ -1,5 +1,7 @@
+using System.Security.Claims;
 using backend.Models;
 using backend.Repository.Produtos;
+using backend.Services.Clientes;
 using backend.Services.Produtos;
 using FluentValidation;
 using FluentValidation.Results;
@@ -20,9 +22,25 @@ public class ProdutoServiceTestAdicionar
         _mockRepo = new Mock<IProdutoRepository>();
         _mockValidator = new Mock<IValidator<Produto>>();
         _mockContextAccessor = new Mock<IHttpContextAccessor>();
-        _service = new ProdutoService(_mockRepo.Object, _mockValidator.Object,_mockContextAccessor.Object);
+        _service = new ProdutoService(_mockRepo.Object, _mockValidator.Object, _mockContextAccessor.Object);
     }
+    private void SetupHttpContextWithUser(Guid userId)
+    {
+        var claims = new List<Claim>
+        {
+          new Claim(ClaimTypes.NameIdentifier, userId.ToString())
+        };
 
+        var identity = new ClaimsIdentity(claims, "TestAuth");
+        var principal = new ClaimsPrincipal(identity);
+
+        var context = new DefaultHttpContext
+        {
+            User = principal
+        };
+
+        _mockContextAccessor.Setup(c => c.HttpContext).Returns(context);
+    }
     private void SetupValidatorSuccess()
     {
         _mockValidator.Setup(v => v.ValidateAsync(It.IsAny<Produto>(), default))
@@ -60,6 +78,8 @@ public class ProdutoServiceTestAdicionar
         // Arrange
         SetupValidatorSuccess();
         var produtoValido = CriarProdutoPadrao();
+        var userID = new Guid();
+        SetupHttpContextWithUser(userID);
 
         // Act
         await _service.AdicionarProdutoAsync(produtoValido);
@@ -79,6 +99,8 @@ public class ProdutoServiceTestAdicionar
         // Arrange
         SetupValidatorSuccess();
         var produtoValido = CriarProdutoPadrao(preco: preco, quantidade: quantidade);
+        var userID = new Guid();
+        SetupHttpContextWithUser(userID);
 
         // Act
         await _service.AdicionarProdutoAsync(produtoValido);
@@ -95,6 +117,8 @@ public class ProdutoServiceTestAdicionar
         // Arrange
         SetupValidatorFailure("Quantidade não pode ser negativa");
         var produtoInvalido = CriarProdutoPadrao(quantidade: quantidade);
+        var userID = new Guid();
+        SetupHttpContextWithUser(userID);
 
         // Act
         var act = async () => await _service.AdicionarProdutoAsync(produtoInvalido);
@@ -113,6 +137,8 @@ public class ProdutoServiceTestAdicionar
         // Arrange
         SetupValidatorFailure("Preço não pode ser negativo");
         var produtoInvalido = CriarProdutoPadrao(preco: preco);
+        var userID = new Guid();
+        SetupHttpContextWithUser(userID);
 
         // Act
         var act = async () => await _service.AdicionarProdutoAsync(produtoInvalido);
@@ -130,6 +156,8 @@ public class ProdutoServiceTestAdicionar
         // Arrange
         SetupValidatorFailure("Nome é obrigatório");
         var produtoInvalido = CriarProdutoPadrao(nome: nome);
+        var userID = new Guid();
+        SetupHttpContextWithUser(userID);
 
         // Act
         var act = async () => await _service.AdicionarProdutoAsync(produtoInvalido);
@@ -149,6 +177,8 @@ public class ProdutoServiceTestAdicionar
         // Arrange
         SetupValidatorFailure("Nome deve começar com letras");
         var produtoInvalido = CriarProdutoPadrao(nome: nome);
+        var userID = new Guid();
+        SetupHttpContextWithUser(userID);
 
         // Act
         var act = async () => await _service.AdicionarProdutoAsync(produtoInvalido);

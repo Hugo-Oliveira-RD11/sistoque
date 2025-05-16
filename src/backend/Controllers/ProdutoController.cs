@@ -7,7 +7,9 @@ namespace backend.Controllers;
 
 [Route("api/[controller]")]
 [ApiController]
+#if !DEBUG
 [Authorize]
+#endif
 public class ProdutoController : ControllerBase
 {
     private readonly IProdutoService _produtoService;

@@ -7,7 +7,9 @@ namespace backend.Controllers;
 
 [Route("api/[controller]")]
 [ApiController]
+#if !DEBUG
 [Authorize]
+#endif
 public class ClienteController : ControllerBase
 {
     private readonly IClienteService _clienteService;
@@ -68,6 +70,7 @@ public class ClienteController : ControllerBase
     }
 
     [HttpPost]
+    [AllowAnonymous]
     public async Task<ActionResult<Cliente>> Adicionar([FromBody] Cliente cliente)
     {
         if (!ModelState.IsValid)

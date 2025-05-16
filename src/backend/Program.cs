@@ -12,6 +12,7 @@ using FluentValidation;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
+using Scalar.AspNetCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -19,6 +20,7 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddControllers();
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi();
+
 var jwtSettings = builder.Configuration.GetSection("JwtSettings");
 var secretKey = jwtSettings["SecretKey"] ?? throw new InvalidOperationException("SecretKey não configurada");
 var issuer = jwtSettings["Issuer"];
@@ -49,8 +51,9 @@ builder.Services.AddAuthorization(options =>
   options.AddPolicy("RequireAdminRole", policy => policy.RequireRole("Admin"));
   options.AddPolicy("RequireUserRole", policy => policy.RequireRole("User"));
 });
+
 builder.Services.AddDbContext<AppDbContext>(options =>
-  options.UseSqlite(builder.Configuration.GetConnectionString("Data Source=meuDB.db")));
+  options.UseSqlite("Data Source=meuDB.db"));
 
 builder.Services.AddScoped<IProdutoRepository, ProdutoRepository>();
 builder.Services.AddScoped<IClienteRepository, ClienteRepository>();
@@ -70,9 +73,10 @@ var app = builder.Build();
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
+    app.MapScalarApiReference();
 }
 
-app.UseHttpsRedirection();
+//app.UseHttpsRedirection();
 
 app.UseAuthentication();
 app.UseAuthorization();
