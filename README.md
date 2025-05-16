@@ -55,13 +55,6 @@ E o mais importante:
 
 ---
 
-## 🔗 Repositório
-
-Você pode explorar o código-fonte e os testes acessando:  
-📎 [https://github.com/Hugo-Oliveira-RD11/sistoque](https://github.com/Hugo-Oliveira-RD11/sistoque)
-
----
-
 ## 🛠️ Tecnologias
 
 - C# (.NET 9)
